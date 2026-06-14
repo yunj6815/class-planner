@@ -2,14 +2,10 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from collections import defaultdict
-from supabase import create_client, Client
-import extra_streamlit_components as stx  # ✨ 쿠키 관리를 위한 라이브러리 추가
+from supabase import create_client
 
 # 1. 페이지 설정
 st.set_page_config(page_title="스마트 진도표", layout="wide")
-
-# ✨ 쿠키 매니저 실행 (브라우저 쿠키를 읽고 쓰는 역할)
-cookie_manager = stx.CookieManager()
 
 
 # --- [Supabase 연결] ---
@@ -35,8 +31,10 @@ def load_all_user_data(user_id):
             if c not in loaded_df.columns:
                 loaded_df[c] = ""
         st.session_state.timetable = loaded_df[cols]
-        st.session_state.start_date = datetime.strptime(data['start_date'], "%Y-%m-%d").date()
-        st.session_state.end_date = datetime.strptime(data['end_date'], "%Y-%m-%d").date()
+        if 'start_date' in data and data['start_date']:
+            st.session_state.start_date = datetime.strptime(data['start_date'], "%Y-%m-%d").date()
+        if 'end_date' in data and data['end_date']:
+            st.session_state.end_date = datetime.strptime(data['end_date'], "%Y-%m-%d").date()
 
     res_plans = supabase.table("lesson_plans").select("*").eq("user_id", user_id).execute()
     if res_plans.data:
@@ -86,18 +84,16 @@ def save_custom_data():
 # --- [로그인/회원가입 UI] ---
 if 'user' not in st.session_state:
     st.title("🔒 스마트 진도표 시스템")
+    tab1, tab2 = st.tabs(["로그인", "회원가입"])
+    with tab1:
+        log_email = st.text_input("이메일", key="log_email")
+        log_pw = st.text_input("비밀번호", type="password", key="log_pw")
+        if st.button("로그인", type="primary", use_container_width=True):
+            try:
+                response = supabase.auth.sign_in_with_password({"email": log_email, "password": log_pw})
+                st.session_state.user = response.user
 
-    # ✨ 1. 쿠키에서 토큰을 찾아 자동 로그인 시도
-    access_token = cookie_manager.get(cookie="sb_access_token")
-    refresh_token = cookie_manager.get(cookie="sb_refresh_token")
-
-    if access_token and refresh_token:
-        try:
-            # 토큰이 유효하다면 세션을 복구하여 자동 로그인 통과
-            response = supabase.auth.set_session(access_token, refresh_token)
-            st.session_state.user = response.user
-
-            if 'timetable' not in st.session_state:
+                # 로그인 직후 빈 데이터 뼈대 생성
                 st.session_state.timetable = pd.DataFrame("", index=range(1, 10), columns=["월", "화", "수", "목", "금"])
                 st.session_state.lesson_plans_dict = {
                     g: pd.DataFrame({"차시": range(1, 101), "진도 내용": [f"{g} {i}차시 내용" for i in range(1, 101)]}) for g
@@ -108,46 +104,11 @@ if 'user' not in st.session_state:
                 st.session_state.start_date = datetime(2026, 3, 2).date()
                 st.session_state.end_date = datetime(2026, 7, 17).date()
 
-            load_all_user_data(st.session_state.user.id)
-            st.rerun()
-        except Exception:
-            # 토큰이 만료되었거나 오류가 나면 조용히 무시 (다시 로그인 창 표시)
-            pass
-
-    # ✨ 2. 로그인 화면 (쿠키에 토큰이 없거나 실패했을 때만 보임)
-    tab1, tab2 = st.tabs(["로그인", "회원가입"])
-    with tab1:
-        log_email = st.text_input("이메일", key="log_email")
-        log_pw = st.text_input("비밀번호", type="password", key="log_pw")
-        # 자동 로그인 선택 체크박스
-        auto_login = st.checkbox("자동 로그인 유지 (30일)", value=True)
-
-        if st.button("로그인", type="primary", use_container_width=True):
-            try:
-                response = supabase.auth.sign_in_with_password({"email": log_email, "password": log_pw})
-                st.session_state.user = response.user
-
-                # ✨ 로그인 성공 시: 자동 로그인이 체크되어 있다면 쿠키에 토큰 발급
-                if auto_login:
-                    expire_date = datetime.now() + timedelta(days=30)
-                    cookie_manager.set("sb_access_token", response.session.access_token, expires_at=expire_date)
-                    cookie_manager.set("sb_refresh_token", response.session.refresh_token, expires_at=expire_date)
-
-                if 'timetable' not in st.session_state:
-                    st.session_state.timetable = pd.DataFrame("", index=range(1, 10), columns=["월", "화", "수", "목", "금"])
-                    st.session_state.lesson_plans_dict = {
-                        g: pd.DataFrame({"차시": range(1, 101), "진도 내용": [f"{g} {i}차시 내용" for i in range(1, 101)]}) for g
-                        in ["1학년", "2학년", "3학년"]}
-                    st.session_state.events = pd.DataFrame(columns=["날짜", "행사명"])
-                    st.session_state.cancels = pd.DataFrame(columns=["날짜", "교시", "사유"])
-                    st.session_state.custom_overrides = {}
-                    st.session_state.start_date = datetime(2026, 3, 2).date()
-                    st.session_state.end_date = datetime(2026, 7, 17).date()
+                # 생성된 뼈대 위에 DB 데이터 덮어쓰기 시도
                 load_all_user_data(st.session_state.user.id)
                 st.rerun()
             except Exception as e:
                 st.error(f"로그인 실패: {e}")
-
     with tab2:
         reg_email = st.text_input("가입용 이메일", key="reg_email")
         reg_pw = st.text_input("비밀번호(6자 이상)", type="password", key="reg_pw")
@@ -159,48 +120,32 @@ if 'user' not in st.session_state:
                 st.error(f"가입 실패 원인: {e}")
     st.stop()
 
+# 🚨 [안전장치] 혹시 모를 에러 방지를 위해 기본 뼈대 유지 여부 확인
+if 'start_date' not in st.session_state: st.session_state.start_date = datetime(2026, 3, 2).date()
+if 'end_date' not in st.session_state: st.session_state.end_date = datetime(2026, 7, 17).date()
+if 'timetable' not in st.session_state: st.session_state.timetable = pd.DataFrame("", index=range(1, 10),
+                                                                                  columns=["월", "화", "수", "목", "금"])
+if 'lesson_plans_dict' not in st.session_state: st.session_state.lesson_plans_dict = {
+    g: pd.DataFrame({"차시": range(1, 101), "진도 내용": [f"{g} {i}차시 내용" for i in range(1, 101)]}) for g in
+    ["1학년", "2학년", "3학년"]}
+if 'events' not in st.session_state: st.session_state.events = pd.DataFrame(columns=["날짜", "행사명"])
+if 'cancels' not in st.session_state: st.session_state.cancels = pd.DataFrame(columns=["날짜", "교시", "사유"])
+if 'custom_overrides' not in st.session_state: st.session_state.custom_overrides = {}
+
 # --- [메인 화면 UI] ---
-
-# 🚨 [종합 안전장치] 메모리에 데이터가 날아가 있으면 무조건 기본 뼈대를 만들어줌
-if 'start_date' not in st.session_state:
-    st.session_state.start_date = datetime(2026, 3, 2).date()
-    st.session_state.end_date = datetime(2026, 7, 17).date()
-if 'timetable' not in st.session_state:
-    st.session_state.timetable = pd.DataFrame("", index=range(1, 10), columns=["월", "화", "수", "목", "금"])
-if 'lesson_plans_dict' not in st.session_state:
-    st.session_state.lesson_plans_dict = {
-        g: pd.DataFrame({"차시": range(1, 101), "진도 내용": [f"{g} {i}차시 내용" for i in range(1, 101)]}) for g
-        in ["1학년", "2학년", "3학년"]}
-if 'events' not in st.session_state:
-    st.session_state.events = pd.DataFrame(columns=["날짜", "행사명"])
-if 'cancels' not in st.session_state:
-    st.session_state.cancels = pd.DataFrame(columns=["날짜", "교시", "사유"])
-if 'custom_overrides' not in st.session_state:
-    st.session_state.custom_overrides = {}
-
 col_logo, col_user = st.columns([8, 2])
 with col_logo: st.title("📅 교사용 학년별 스마트 진도 관리")
 with col_user:
     st.write(f"👤 **{st.session_state.user.email.split('@')[0]}** 님")
-    # 🚨 [새로 추가할 마법의 버튼]
-    if st.button("🔄 데이터 강제 복구", type="primary", use_container_width=True):
-        load_all_user_data(st.session_state.user.id)
-        st.rerun()
-
     if st.button("로그아웃"):
-        # ✨ 로그아웃 처리 시 발급했던 쿠키(증명서)도 완벽하게 폐기
         supabase.auth.sign_out()
-        cookie_manager.delete("sb_access_token")
-        cookie_manager.delete("sb_refresh_token")
         del st.session_state.user
         st.rerun()
 
 st.divider()
 
-# --- [CSS 스타일 수정: 너비 일치 및 색상 복구] ---
 st.markdown("""
 <style>
-    /* 수정/편집 모드일 때 보여지는 카드 스타일 */
     .slot-card { padding: 10px; border-radius: 4px; margin-bottom: 5px; min-height: 90px; line-height: 1.4; border: 1px solid #ddd; width: 100%; }
     .grade1 { background-color: #fef0d9; border-top: 4px solid #fdcc8a; }
     .grade2 { background-color: #e5f5e0; border-top: 4px solid #a1d99b; }
@@ -208,7 +153,6 @@ st.markdown("""
     .overridden { border-left: 3px solid #ff1493 !important; }
     .empty-slot { min-height: 120px; }
 
-    /* 버튼(진도 카드) 공통 스타일 (너비 100% 맞춤) */
     div.element-container:has(span.edit-anchor) + div.element-container button {
         width: 100% !important;
         height: auto !important;
@@ -226,16 +170,12 @@ st.markdown("""
     div.element-container:has(span.edit-anchor) + div.element-container button:hover { transform: scale(1.02); border-color: #999 !important; }
     div.element-container:has(span.edit-anchor) + div.element-container button p { margin: 0 !important; text-align: left !important; font-size: 0.9em !important; }
 
-    /* 학년별 버튼 배경색 복구 (필수!) */
     div.element-container:has(span.grade-1) + div.element-container button { background-color: #fef0d9 !important; border-top: 4px solid #fdcc8a !important; }
     div.element-container:has(span.grade-2) + div.element-container button { background-color: #e5f5e0 !important; border-top: 4px solid #a1d99b !important; }
     div.element-container:has(span.grade-3) + div.element-container button { background-color: #eff3ff !important; border-top: 4px solid #9ecae1 !important; }
     div.element-container:has(span.overridden-true) + div.element-container button { border-left: 3px solid #ff1493 !important; }
 
-    /* 메모 입력창들이 포함된 컬럼간 간격 최소화 */
-    [data-testid="column"] {
-        gap: 0.5rem !important;
-    }
+    [data-testid="column"] { gap: 0.5rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -352,8 +292,7 @@ with col_left:
                 if curr_date in [str(d) for d in st.session_state.events["날짜"].values]:
                     if period == 1:
                         ev_name = \
-                            st.session_state.events[st.session_state.events["날짜"].astype(str) == curr_date][
-                                "행사명"].values[0]
+                        st.session_state.events[st.session_state.events["날짜"].astype(str) == curr_date]["행사명"].values[0]
                         st.markdown(
                             f"<div style='color:red; font-weight:bold; text-align:center; margin-top:30px;'>🚩 {ev_name}</div>",
                             unsafe_allow_html=True)
@@ -362,7 +301,7 @@ with col_left:
                 if class_info:
                     cancel_match = st.session_state.cancels[
                         (st.session_state.cancels["날짜"].astype(str) == curr_date) & (
-                                st.session_state.cancels["교시"].astype(str) == str(period))]
+                                    st.session_state.cancels["교시"].astype(str) == str(period))]
                     override_key = f"{curr_date}_{period}"
                     is_editing = st.session_state.get(f"edit_{override_key}", False)
                     grade_num = class_info[0] if class_info[0] in ['1', '2', '3'] else '1'
@@ -405,7 +344,6 @@ with col_left:
                                 st.session_state[f"edit_{override_key}"] = True
                                 st.rerun()
 
-                    # 메모 및 상태 선택 영역
                     m_c1, m_c2 = st.columns([1, 2.5])
                     m_c1.selectbox("st", ["O", "△", "X"], key=f"s_{override_key}", label_visibility="collapsed")
                     m_c2.text_input("m", key=f"m_{override_key}", placeholder="메모", label_visibility="collapsed")
