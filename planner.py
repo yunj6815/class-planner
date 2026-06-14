@@ -160,10 +160,24 @@ if 'user' not in st.session_state:
     st.stop()
 
 # --- [메인 화면 UI] ---
-# 🚨 [안전장치] 혹시라도 메모리에 날짜가 없으면 기본값으로 강제 세팅
+# --- [메인 화면 UI] ---
+
+# 🚨 [종합 안전장치] 메모리에 데이터가 날아가 있으면 무조건 기본 뼈대를 만들어줌
 if 'start_date' not in st.session_state:
     st.session_state.start_date = datetime(2026, 3, 2).date()
     st.session_state.end_date = datetime(2026, 7, 17).date()
+if 'timetable' not in st.session_state:
+    st.session_state.timetable = pd.DataFrame("", index=range(1, 10), columns=["월", "화", "수", "목", "금"])
+if 'lesson_plans_dict' not in st.session_state:
+    st.session_state.lesson_plans_dict = {
+        g: pd.DataFrame({"차시": range(1, 101), "진도 내용": [f"{g} {i}차시 내용" for i in range(1, 101)]}) for g
+        in ["1학년", "2학년", "3학년"]}
+if 'events' not in st.session_state:
+    st.session_state.events = pd.DataFrame(columns=["날짜", "행사명"])
+if 'cancels' not in st.session_state:
+    st.session_state.cancels = pd.DataFrame(columns=["날짜", "교시", "사유"])
+if 'custom_overrides' not in st.session_state:
+    st.session_state.custom_overrides = {}
 
 col_logo, col_user = st.columns([8, 2])
 with col_logo: st.title("📅 교사용 학년별 스마트 진도 관리")
