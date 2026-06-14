@@ -182,8 +182,11 @@ col_logo, col_user = st.columns([8, 2])
 with col_logo: st.title("📅 교사용 학년별 스마트 진도 관리")
 with col_user:
     st.write(f"👤 **{st.session_state.user.email.split('@')[0]}** 님")
-    # 🚨 [추가할 코드] 현재 로그인된 test 님의 진짜 고유번호를 화면에 출력
-    st.code(st.session_state.user.id)
+    # 🚨 [새로 추가할 마법의 버튼]
+    if st.button("🔄 데이터 강제 복구", type="primary", use_container_width=True):
+        load_all_user_data(st.session_state.user.id)
+        st.rerun()
+
     if st.button("로그아웃"):
         # ✨ 로그아웃 처리 시 발급했던 쿠키(증명서)도 완벽하게 폐기
         supabase.auth.sign_out()
