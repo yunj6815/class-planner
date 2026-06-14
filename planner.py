@@ -345,7 +345,12 @@ with col_left:
                                 st.rerun()
 
                     m_c1, m_c2 = st.columns([1, 2.5])
-                    m_c1.selectbox("st", ["O", "△", "X"], key=f"s_{override_key}", label_visibility="collapsed")
-                    m_c2.text_input("m", key=f"m_{override_key}", placeholder="메모", label_visibility="collapsed")
-                else:
-                    st.markdown("<div class='empty-slot'></div>", unsafe_allow_html=True)
+                    m_c1.selectbox(
+                        "상태", ["", "O", "△", "X"],
+                        key=f"s_{override_key}",
+                        index=["", "O", "△", "X"].index(st.session_state.status_map.get(override_key, "")),
+                        on_change=lambda: update_status(override_key, st.session_state[f"s_{override_key}"]),
+                        label_visibility="collapsed"
+                    )
+                    m_c2.text_input("m", value=st.session_state.get(f"m_{override_key}", ""), key=f"m_{override_key}",
+                                    placeholder="메모", label_visibility="collapsed")
