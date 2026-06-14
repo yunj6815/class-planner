@@ -160,7 +160,6 @@ if 'user' not in st.session_state:
     st.stop()
 
 # --- [메인 화면 UI] ---
-# --- [메인 화면 UI] ---
 
 # 🚨 [종합 안전장치] 메모리에 데이터가 날아가 있으면 무조건 기본 뼈대를 만들어줌
 if 'start_date' not in st.session_state:
@@ -183,6 +182,8 @@ col_logo, col_user = st.columns([8, 2])
 with col_logo: st.title("📅 교사용 학년별 스마트 진도 관리")
 with col_user:
     st.write(f"👤 **{st.session_state.user.email.split('@')[0]}** 님")
+    # 🚨 [추가할 코드] 현재 로그인된 test 님의 진짜 고유번호를 화면에 출력
+    st.code(st.session_state.user.id)
     if st.button("로그아웃"):
         # ✨ 로그아웃 처리 시 발급했던 쿠키(증명서)도 완벽하게 폐기
         supabase.auth.sign_out()
