@@ -160,6 +160,11 @@ if 'user' not in st.session_state:
     st.stop()
 
 # --- [메인 화면 UI] ---
+# 🚨 [안전장치] 혹시라도 메모리에 날짜가 없으면 기본값으로 강제 세팅
+if 'start_date' not in st.session_state:
+    st.session_state.start_date = datetime(2026, 3, 2).date()
+    st.session_state.end_date = datetime(2026, 7, 17).date()
+
 col_logo, col_user = st.columns([8, 2])
 with col_logo: st.title("📅 교사용 학년별 스마트 진도 관리")
 with col_user:
