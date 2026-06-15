@@ -2,3 +2,4 @@ streamlit
 pandas
 supabase
 extra-streamlit-components
+xlsxwriter
