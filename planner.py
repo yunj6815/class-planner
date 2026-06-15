@@ -231,12 +231,28 @@ with col_right:
                                                                        key=f"p_{g}")
 
     with st.expander("🚨 일정 변경 (행사/결강)", expanded=True):
-        st.write("**[전일 행사]**")
-        st.session_state.events = st.data_editor(st.session_state.events, num_rows="dynamic", use_container_width=True,
-                                                 key="ev")
-        st.write("**[특정 교시 결강]**")
-        st.session_state.cancels = st.data_editor(st.session_state.cancels, num_rows="dynamic",
-                                                  use_container_width=True, key="ca")
+        # 👇 st.form을 사용하여 입력 위젯들을 하나로 묶습니다.
+        with st.form("event_cancel_form"):
+            st.write("**[전일 행사]**")
+            # 입력을 해도 즉시 session_state를 바꾸지 않고 임시 변수에 담아둡니다.
+            temp_events = st.data_editor(st.session_state.events, num_rows="dynamic", use_container_width=True,
+                                         key="ev_form")
+
+            st.write("**[특정 교시 결강]**")
+            temp_cancels = st.data_editor(st.session_state.cancels, num_rows="dynamic", use_container_width=True,
+                                          key="ca_form")
+
+            # 👇 폼 안에는 반드시 제출(Submit) 버튼이 있어야 합니다.
+            submitted = st.form_submit_button("✅ 행사/결강 적용 및 저장", type="primary", use_container_width=True)
+
+            if submitted:
+                # 버튼을 누른 순간에만 임시 변수의 데이터를 진짜 state로 옮겨 담습니다.
+                st.session_state.events = temp_events
+                st.session_state.cancels = temp_cancels
+
+                # DB에 바로 저장하고 화면을 단 한 번만 새로고침합니다.
+                save_custom_data()
+                st.rerun()
 
 
 def get_class_start_indices(start_dt, target_dt, timetable, events, cancels):
@@ -273,7 +289,25 @@ with col_left:
 
 
     all_weeks = get_all_weeks(st.session_state.start_date, st.session_state.end_date)
-    selected_week_data = st.selectbox("주차 선택", all_weeks, format_func=lambda x: x['label'])
+
+    # 1. 오늘 날짜 구하기
+    today = datetime.now().date()
+
+    # 2. 오늘 날짜가 속한 주차의 인덱스 찾기 (기본값은 1주차인 0)
+    default_week_idx = 0
+    for i, week in enumerate(all_weeks):
+        week_start = week['start']
+        week_end = week_start + timedelta(days=6)  # 해당 주차의 일요일까지
+        if week_start <= today <= week_end:
+            default_week_idx = i
+            break
+
+    # 만약 오늘이 학기 종료일 이후라면 가장 마지막 주차를 보여줌
+    if today > st.session_state.end_date:
+        default_week_idx = len(all_weeks) - 1
+
+    # 3. selectbox에 계산된 이번 주 인덱스(default_week_idx) 적용
+    selected_week_data = st.selectbox("주차 선택", all_weeks, index=default_week_idx, format_func=lambda x: x['label'])
 
     current_class_indices = get_class_start_indices(st.session_state.start_date, selected_week_data['start'],
                                                     st.session_state.timetable, st.session_state.events,
