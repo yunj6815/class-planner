@@ -221,7 +221,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🗄️ [신규] 서랍형 사이드바 메뉴 (설정 및 저장 기능 통합)
+# 🗄️ [상단] 사이드바 설정 영역 (대시보드는 맨 아래로 이동)
 # ==========================================
 with st.sidebar:
     st.title("⚙️ 설정 및 관리")
@@ -254,11 +254,10 @@ with st.sidebar:
 
     st.divider()
 
-    # ⭐ [핵심 신규 기능] 엑셀 백업 및 복원 (내년도 재사용)
+    # 엑셀 백업 및 복원
     with st.expander("📥 진도 계획 엑셀 백업 / 업로드", expanded=False):
         st.write("학기 말에 엑셀로 백업해 두고, 내년에 다시 업로드하여 그대로 재사용하세요!")
 
-        # 다운로드 로직
         towrite = io.BytesIO()
         with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
             for g in ["1학년", "2학년", "3학년"]:
@@ -283,17 +282,15 @@ with st.sidebar:
                     for g in ["1학년", "2학년", "3학년"]:
                         if g in xls.sheet_names:
                             loaded_df = pd.read_excel(xls, sheet_name=g)
-                            # 최소한의 데이터 검증
                             if "차시" in loaded_df.columns and "진도 내용" in loaded_df.columns:
                                 st.session_state.lesson_plans_dict[g] = loaded_df
-                    # 업로드 후 바로 DB에 저장
                     for g in ["1학년", "2학년", "3학년"]: save_lesson_plan(g)
                     st.success("✅ 파일이 성공적으로 적용되었습니다!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
 
-    # 2. 기초 설정 창들
+    # 기초 설정 창들
     with st.expander("📅 학기 및 시간표 기초 설정", expanded=False):
         c1, c2 = st.columns(2)
         st.session_state.start_date = c1.date_input("시작일", st.session_state.start_date)
@@ -329,16 +326,8 @@ with st.sidebar:
                 save_custom_data()
                 st.rerun()
 
-    with st.expander("📊 반별 진도 현황 대시보드", expanded=False):
-        st.write("현재까지 누적된 학급별 진행 차시입니다.")
-        # 메인 화면에서 계산된 current_class_indices를 참조 (아래에서 계산됨)
-        if 'current_class_indices' in globals() or 'current_class_indices' in locals():
-            pass  # 사이드바가 먼저 렌더링되므로, 위치상 이 기능은 아래에서 함수화 하거나 일단 보류할 수 있지만,
-            # 파이썬 특성상 이 부분은 가장 마지막에 표시되거나 생략되는 것이 깔끔합니다.
-        st.info("메인 화면에서 진도율을 한 눈에 확인하세요.")
-
 # ==========================================
-# 🖥️ [메인 화면] 100% 가로 너비를 활용하는 시간표
+# 🖥️ [메인 화면] 진도율 계산 및 시간표 렌더링
 # ==========================================
 st.title("📅 교사용 학년별 스마트 진도 관리")
 
@@ -357,6 +346,7 @@ if today > st.session_state.end_date:
 
 selected_week_data = st.selectbox("주차 선택", all_weeks, index=default_week_idx, format_func=lambda x: x['label'])
 
+# 👇 여기서 current_class_indices (진도율)이 계산됩니다!
 current_class_indices = get_class_start_indices(st.session_state.start_date, selected_week_data['start'],
                                                 st.session_state.timetable, st.session_state.events,
                                                 st.session_state.cancels)
@@ -566,3 +556,27 @@ for period in range(1, 10):
                                 label_visibility="collapsed", on_change=update_memo, args=(override_key,))
             else:
                 st.markdown("<div class='empty-slot'></div>", unsafe_allow_html=True)
+
+# ==========================================
+# 📊 [하단] 계산이 모두 끝난 뒤에 사이드바에 대시보드 추가!
+# ==========================================
+with st.sidebar:
+    with st.expander("📊 반별 진도 현황 대시보드", expanded=True):
+        st.write("현재까지 누적된 학급별 진행 차시입니다.")
+
+        for grade_name in ["1학년", "2학년", "3학년"]:
+            st.markdown(f"**🔹 {grade_name}**")
+
+            grade_classes = [c for c in current_class_indices.keys() if c.startswith(grade_name[0])]
+
+            if not grade_classes:
+                st.caption("등록된 수업이 없습니다.")
+            else:
+                for cls in sorted(grade_classes):
+                    current_idx = current_class_indices[cls]
+                    progress_val = min(current_idx / 40.0, 1.0)
+
+                    col_cls_name, col_cls_bar = st.columns([1, 3])
+                    col_cls_name.markdown(f"<div style='font-size:0.9em; margin-top:5px;'>{cls}반</div>",
+                                          unsafe_allow_html=True)
+                    col_cls_bar.progress(progress_val, text=f"**{current_idx}차시** 완료")
