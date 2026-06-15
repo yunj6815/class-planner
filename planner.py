@@ -388,4 +388,4 @@ with col_left:
                         args=(override_key,)
                     )
                 else:
-                st.markdown("<div class='empty-slot'></div>", unsafe_allow_html=True)
+                    st.markdown("<div class='empty-slot'></div>", unsafe_allow_html=True)
