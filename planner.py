@@ -130,6 +130,14 @@ def get_all_weeks(start, end):
     return weeks
 
 
+def update_status(k):
+    st.session_state.status_data[k] = st.session_state[f"s_{k}"]
+
+
+def update_memo(k):
+    st.session_state.memo_data[k] = st.session_state[f"m_{k}"]
+
+
 # --- [로그인/회원가입 UI] ---
 if 'user' not in st.session_state:
     st.title("🔒 스마트 진도표 시스템")
@@ -180,15 +188,6 @@ if 'cancels' not in st.session_state: st.session_state.cancels = pd.DataFrame(co
 if 'custom_overrides' not in st.session_state: st.session_state.custom_overrides = {}
 if 'status_data' not in st.session_state: st.session_state.status_data = {}
 if 'memo_data' not in st.session_state: st.session_state.memo_data = {}
-
-
-def update_status(k):
-    st.session_state.status_data[k] = st.session_state[f"s_{k}"]
-
-
-def update_memo(k):
-    st.session_state.memo_data[k] = st.session_state[f"m_{k}"]
-
 
 # --- [메인 화면 UI] ---
 col_logo, col_user = st.columns([8, 2])
@@ -242,23 +241,15 @@ st.markdown("""
         box-shadow: none !important;
     }
 
-    @media screen and (max-width: 768px) {
-        .block-container { padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 2rem !important; }
-        .slot-card { min-height: 60px !important; padding: 5px !important; font-size: 0.85em !important; }
-        div.element-container button { min-height: 60px !important; padding: 5px !important; }
-        div.element-container button p { font-size: 0.8em !important; }
-        .empty-slot { min-height: 70px !important; }
-        [data-testid="stSelectbox"] label, [data-testid="stTextInput"] label { display: none; }
-        
     [data-testid="column"] { gap: 0.5rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# 탭으로 화면 분리
-tab_main, tab_setting = st.tabs(["📅 스마트 진도표", "⚙️ 설정 및 저장"])
+# 레이아웃 분할 (좌측 7.5 : 우측 2.5)
+col_left, col_right = st.columns([7.5, 2.5])
 
-# --- [설정 및 저장 탭] ---
-with tab_setting:
+# --- [우측: 설정 및 저장] ---
+with col_right:
     st.subheader("⚙️ 설정 및 저장")
     if st.button("💾 전체 설정 DB 저장", type="primary", use_container_width=True):
         save_settings()
@@ -313,8 +304,8 @@ with tab_setting:
                 save_custom_data()
                 st.rerun()
 
-# --- [스마트 진도표 메인 화면 탭] ---
-with tab_main:
+# --- [좌측: 스마트 진도표 메인 화면] ---
+with col_left:
     all_weeks = get_all_weeks(st.session_state.start_date, st.session_state.end_date)
 
     today = datetime.now().date()
