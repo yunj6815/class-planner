@@ -285,7 +285,7 @@ with col_right:
 
     with st.expander("🚨 일정 변경 (행사/결강)", expanded=True):
         with st.form("event_cancel_form"):
-            header_col1, header_col2 = st.columns([6, 4])
+            header_col1, header_col2 = st.columns([7, 3])
             with header_col1:
                 st.write("**[전일 행사]**")
             with header_col2:
