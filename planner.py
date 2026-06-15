@@ -484,14 +484,18 @@ with tab_main:
                                                                         "사유": f"🔄 {new_date_str[-5:]} {new_period}교시로 이동"}])
                                             st.session_state.cancels = pd.concat([st.session_state.cancels, new_cancel],
                                                                                  ignore_index=True)
+
                                             st.session_state.custom_overrides[
                                                 new_override_key] = f"[{class_info}] {new_val}"
                                             st.session_state.custom_overrides.pop(override_key, None)
+
                                             if override_key in st.session_state.status_data:
-                                            st.session_state.status_data[
-                                                new_override_key] = st.session_state.status_data.pop(override_key)
-                                            if override_key in st.session_state.memo_data: st.session_state.memo_data[
-                                                new_override_key] = st.session_state.memo_data.pop(override_key)
+                                                st.session_state.status_data[
+                                                    new_override_key] = st.session_state.status_data.pop(override_key)
+
+                                            if override_key in st.session_state.memo_data:
+                                                st.session_state.memo_data[
+                                                    new_override_key] = st.session_state.memo_data.pop(override_key)
                                         else:
                                             if is_moved_class:
                                                 st.session_state.custom_overrides[
