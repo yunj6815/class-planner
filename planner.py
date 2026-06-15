@@ -77,7 +77,7 @@ def save_custom_data():
         "user_id": user_id,
         "overrides": st.session_state.custom_overrides,
         "events": st.session_state.events.to_dict(),
-        "cancels": st.session_state.cancels.to_dict(),
+        "cancels": st.session_state.cancels.to_dict()
         "status_data": st.session_state.status_data,
         "memo_data": st.session_state.memo_data
     }
