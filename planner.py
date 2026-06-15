@@ -20,7 +20,7 @@ def init_connection():
 supabase = init_connection()
 
 
-# --- [DB 연동 함수들] ---
+# --- [DB 연동 및 헬퍼 함수들] ---
 def load_all_user_data(user_id):
     res_settings = supabase.table("user_settings").select("*").eq("id", user_id).execute()
     if res_settings.data:
@@ -50,6 +50,8 @@ def load_all_user_data(user_id):
         st.session_state.cancels = pd.DataFrame(d.get('cancels', []))
         st.session_state.status_data = d.get('status_data', {})
         st.session_state.memo_data = d.get('memo_data', {})
+
+
 def create_backup():
     st.session_state.backup = {
         "custom_overrides": copy.deepcopy(st.session_state.custom_overrides),
@@ -57,6 +59,8 @@ def create_backup():
         "status_data": copy.deepcopy(st.session_state.status_data),
         "memo_data": copy.deepcopy(st.session_state.memo_data)
     }
+
+
 def save_settings():
     user_id = st.session_state.user.id
     payload = {
@@ -94,6 +98,38 @@ def save_custom_data():
         st.error(f"🚨 DB 저장 실패: {e}")
 
 
+def get_class_start_indices(start_dt, target_dt, timetable, events, cancels):
+    class_indices = defaultdict(int)
+    curr = start_dt
+    while curr < target_dt:
+        if curr.weekday() < 5:
+            curr_str = curr.strftime("%Y-%m-%d")
+            day_name = ["월", "화", "수", "목", "금"][curr.weekday()]
+            if curr_str not in [str(d) for d in events["날짜"].values]:
+                for p in range(1, 10):
+                    class_info = str(timetable.loc[p, day_name]).strip()
+                    if class_info:
+                        is_cancelled = not cancels[
+                            (cancels["날짜"].astype(str) == curr_str) & (cancels["교시"].astype(str) == str(p))].empty
+                        if not is_cancelled:
+                            class_indices[class_info] += 1
+        curr += timedelta(days=1)
+    return class_indices
+
+
+def get_all_weeks(start, end):
+    weeks = []
+    curr = start - timedelta(days=start.weekday())
+    week_num = 1
+    while curr <= end:
+        week_end = curr + timedelta(days=4)
+        weeks.append(
+            {"label": f"{week_num}주차 ({curr.strftime('%m/%d')}~{week_end.strftime('%m/%d')})", "start": curr})
+        curr += timedelta(days=7)
+        week_num += 1
+    return weeks
+
+
 # --- [로그인/회원가입 UI] ---
 if 'user' not in st.session_state:
     st.title("🔒 스마트 진도표 시스템")
@@ -106,7 +142,6 @@ if 'user' not in st.session_state:
                 response = supabase.auth.sign_in_with_password({"email": log_email, "password": log_pw})
                 st.session_state.user = response.user
 
-                # 로그인 직후 빈 데이터 뼈대 생성
                 st.session_state.timetable = pd.DataFrame("", index=range(1, 10), columns=["월", "화", "수", "목", "금"])
                 st.session_state.lesson_plans_dict = {
                     g: pd.DataFrame({"차시": range(1, 101), "진도 내용": [f"{g} {i}차시 내용" for i in range(1, 101)]}) for g
@@ -117,7 +152,6 @@ if 'user' not in st.session_state:
                 st.session_state.start_date = datetime(2026, 3, 2).date()
                 st.session_state.end_date = datetime(2026, 7, 17).date()
 
-                # 생성된 뼈대 위에 DB 데이터 덮어쓰기 시도
                 load_all_user_data(st.session_state.user.id)
                 st.rerun()
             except Exception as e:
@@ -133,7 +167,7 @@ if 'user' not in st.session_state:
                 st.error(f"가입 실패 원인: {e}")
     st.stop()
 
-# 🚨 [안전장치] 혹시 모를 에러 방지를 위해 기본 뼈대 유지 여부 확인
+# 🚨 [안전장치]
 if 'start_date' not in st.session_state: st.session_state.start_date = datetime(2026, 3, 2).date()
 if 'end_date' not in st.session_state: st.session_state.end_date = datetime(2026, 7, 17).date()
 if 'timetable' not in st.session_state: st.session_state.timetable = pd.DataFrame("", index=range(1, 10),
@@ -147,12 +181,14 @@ if 'custom_overrides' not in st.session_state: st.session_state.custom_overrides
 if 'status_data' not in st.session_state: st.session_state.status_data = {}
 if 'memo_data' not in st.session_state: st.session_state.memo_data = {}
 
-# 👇 위젯 상태 변경 시 실행될 콜백 함수 (UI 렌더링 전 상단에 배치)
+
 def update_status(k):
     st.session_state.status_data[k] = st.session_state[f"s_{k}"]
 
+
 def update_memo(k):
     st.session_state.memo_data[k] = st.session_state[f"m_{k}"]
+
 
 # --- [메인 화면 UI] ---
 col_logo, col_user = st.columns([8, 2])
@@ -195,53 +231,36 @@ st.markdown("""
     div.element-container:has(span.grade-1) + div.element-container button { background-color: #fef0d9 !important; border-top: 4px solid #fdcc8a !important; }
     div.element-container:has(span.grade-2) + div.element-container button { background-color: #e5f5e0 !important; border-top: 4px solid #a1d99b !important; }
     div.element-container:has(span.grade-3) + div.element-container button { background-color: #eff3ff !important; border-top: 4px solid #9ecae1 !important; }
-    div.element-container:has(span.overridden-true) + div.element-container button { border-left: 3px solid #ff1493 !important; div.element-container:has(span.disabled-slot) + div.element-container button { 
+
+    div.element-container:has(span.overridden-true) + div.element-container button { border-left: 3px solid #ff1493 !important; }
+
     div.element-container:has(span.disabled-slot) + div.element-container button { 
         background-color: #f8f9fa !important;
         border: 1px solid #e9ecef !important;
         border-top: none !important;
         color: #adb5bd !important;
-        box-shadow: none !important;}
-        @media screen and (max-width: 768px) {
-        /* 1. 화면 양옆 여백을 팍 줄여서 공간 확보 */
+        box-shadow: none !important;
+    }
+
+    @media screen and (max-width: 768px) {
         .block-container { padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 2rem !important; }
-        
-        /* 2. 수업 카드 크기와 글자 축소 */
         .slot-card { min-height: 60px !important; padding: 5px !important; font-size: 0.85em !important; }
         div.element-container button { min-height: 60px !important; padding: 5px !important; }
         div.element-container button p { font-size: 0.8em !important; }
-        
-        /* 3. 빈 시간표 칸 높이 줄이기 */
         .empty-slot { min-height: 70px !important; }
-        
-        /* 4. O/△/X 와 메모 칸 여백 축소 */
         [data-testid="stSelectbox"] label, [data-testid="stTextInput"] label { display: none; }
-    }
-        /* 5. 가로 스크롤 허용 (필요시 추가) */
         [data-testid="column"] { min-width: 150px !important; }
         div[data-testid="stHorizontalBlock"] { overflow-x: auto !important; flex-wrap: nowrap !important; }
     }    
-
     [data-testid="column"] { gap: 0.5rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# 기존 컬럼(col_left, col_right)을 지우고 탭으로 변경
+# 탭으로 화면 분리
 tab_main, tab_setting = st.tabs(["📅 스마트 진도표", "⚙️ 설정 및 저장"])
 
+# --- [설정 및 저장 탭] ---
 with tab_setting:
-    # 기존 col_right 안에 있던 모든 내용 (저장 버튼, 실행 취소 버튼, 학기 설정, 일정 변경 폼 등)을
-    # 이 안으로 들여쓰기 해서 넣습니다.
-    st.subheader("⚙️ 설정 및 저장")
-    # ... 생략 ...
-
-with tab_main:
-    # 기존 col_left 안에 있던 모든 내용 (주차 선택, 시간표 렌더링 등)을
-    # 이 안으로 들여쓰기 해서 넣습니다.
-    all_weeks = get_all_weeks(st.session_state.start_date, st.session_state.end_date)
-    # ... 생략 ...
-
-with col_right:
     st.subheader("⚙️ 설정 및 저장")
     if st.button("💾 전체 설정 DB 저장", type="primary", use_container_width=True):
         save_settings()
@@ -277,87 +296,41 @@ with col_right:
 
     with st.expander("🚨 일정 변경 (행사/결강)", expanded=True):
         with st.form("event_cancel_form"):
-            # 제목과 저장 버튼을 위쪽에 나란히 배치하기 위해 컬럼 분할
             header_col1, header_col2 = st.columns([7, 3])
-
             with header_col1:
                 st.write("**[전일 행사]**")
             with header_col2:
-                # 저장 버튼을 위쪽으로 끌어올림
                 submitted = st.form_submit_button("✅ 전체 저장", type="primary", use_container_width=True)
 
-            # 전일 행사 표
             temp_events = st.data_editor(st.session_state.events, num_rows="dynamic", use_container_width=True,
                                          key="ev_form")
-
-            st.markdown("<br>", unsafe_allow_html=True)  # 약간의 여백 추가
-
-            # 특정 교시 결강 표
+            st.markdown("<br>", unsafe_allow_html=True)
             st.write("**[특정 교시 결강]**")
             temp_cancels = st.data_editor(st.session_state.cancels, num_rows="dynamic", use_container_width=True,
                                           key="ca_form")
 
-            # 폼 제출 시 작동할 로직
             if submitted:
                 st.session_state.events = temp_events
                 st.session_state.cancels = temp_cancels
-
                 save_custom_data()
                 st.rerun()
 
-
-def get_class_start_indices(start_dt, target_dt, timetable, events, cancels):
-    class_indices = defaultdict(int)
-    curr = start_dt
-    while curr < target_dt:
-        if curr.weekday() < 5:
-            curr_str = curr.strftime("%Y-%m-%d")
-            day_name = ["월", "화", "수", "목", "금"][curr.weekday()]
-            if curr_str not in [str(d) for d in events["날짜"].values]:
-                for p in range(1, 10):
-                    class_info = str(timetable.loc[p, day_name]).strip()
-                    if class_info:
-                        is_cancelled = not cancels[
-                            (cancels["날짜"].astype(str) == curr_str) & (cancels["교시"].astype(str) == str(p))].empty
-                        if not is_cancelled:
-                            class_indices[class_info] += 1
-        curr += timedelta(days=1)
-    return class_indices
-
-
-with col_left:
-    def get_all_weeks(start, end):
-        weeks = []
-        curr = start - timedelta(days=start.weekday())
-        week_num = 1
-        while curr <= end:
-            week_end = curr + timedelta(days=4)
-            weeks.append(
-                {"label": f"{week_num}주차 ({curr.strftime('%m/%d')}~{week_end.strftime('%m/%d')})", "start": curr})
-            curr += timedelta(days=7)
-            week_num += 1
-        return weeks
-
-
+# --- [스마트 진도표 메인 화면 탭] ---
+with tab_main:
     all_weeks = get_all_weeks(st.session_state.start_date, st.session_state.end_date)
 
-    # 1. 오늘 날짜 구하기
     today = datetime.now().date()
-
-    # 2. 오늘 날짜가 속한 주차의 인덱스 찾기 (기본값은 1주차인 0)
     default_week_idx = 0
     for i, week in enumerate(all_weeks):
         week_start = week['start']
-        week_end = week_start + timedelta(days=6)  # 해당 주차의 일요일까지
+        week_end = week_start + timedelta(days=6)
         if week_start <= today <= week_end:
             default_week_idx = i
             break
 
-    # 만약 오늘이 학기 종료일 이후라면 가장 마지막 주차를 보여줌
     if today > st.session_state.end_date:
         default_week_idx = len(all_weeks) - 1
 
-    # 3. selectbox에 계산된 이번 주 인덱스(default_week_idx) 적용
     selected_week_data = st.selectbox("주차 선택", all_weeks, index=default_week_idx, format_func=lambda x: x['label'])
 
     current_class_indices = get_class_start_indices(st.session_state.start_date, selected_week_data['start'],
@@ -389,19 +362,15 @@ with col_left:
         date_str = datetime.strptime(current_week_dates[i], "%Y-%m-%d").strftime("%m/%d")
         h_cols[i + 1].markdown(f"<div style='text-align:center; font-weight:bold;'>{day} ({date_str})</div>",
                                unsafe_allow_html=True)
+
     st.divider()
 
-    # ---------------------------------------------------------
-    # 👇 여기서부터 화면에 시간표를 그려주는 메인 반복문 시작
-    # ---------------------------------------------------------
     for period in range(1, 10):
-        # 1. 빈 줄(교시)인지 체크: 기본 시간표에 있거나, '이동'해온 데이터가 있으면 그 줄을 표시
         has_class_in_row = False
         for i, d in enumerate(days):
             if str(st.session_state.timetable.loc[period, d]).strip() != "":
                 has_class_in_row = True
                 break
-            # 이동된 수업이 있는지 체크
             check_key = f"{current_week_dates[i]}_{period}"
             val = st.session_state.custom_overrides.get(check_key, "")
             if isinstance(val, str) and val.startswith("[") and "] " in val:
@@ -418,17 +387,15 @@ with col_left:
             curr_date = current_week_dates[i]
             override_key = f"{curr_date}_{period}"
 
-            # 기본 반 정보
             base_class_info = str(st.session_state.timetable.loc[period, day]).strip()
             class_info = base_class_info
 
-            # 2. 다른 곳에서 여기로 이동된 수업인지 판별 (비밀 태그 [반이름] 확인)
             override_val = st.session_state.custom_overrides.get(override_key, "")
             is_moved_class = isinstance(override_val, str) and override_val.startswith("[") and "] " in override_val
 
             if is_moved_class:
                 end_idx = override_val.index("] ")
-                class_info = override_val[1:end_idx]  # 빈칸이어도 반 이름 강제 인식 (예: 204)
+                class_info = override_val[1:end_idx]
 
             with r_cols[i + 1]:
                 if curr_date in [str(d) for d in st.session_state.events["날짜"].values]:
@@ -448,14 +415,12 @@ with col_left:
                     is_editing = st.session_state.get(f"edit_{override_key}", False)
                     grade_num = class_info[0] if class_info[0] in ['1', '2', '3'] else '1'
 
-                    # 3. 휴강/이동으로 인해 원래 자리가 취소된 경우 (회색 버튼)
                     if not cancel_match.empty and not is_moved_class:
                         display_content = f"⚠️ {cancel_match.iloc[-1]['사유']}"
                         st.markdown("<span class='edit-anchor disabled-slot'></span>", unsafe_allow_html=True)
                         st.button(f"**{class_info}반**\n\n{display_content}", key=f"btn_{override_key}", disabled=True,
                                   use_container_width=True)
                     else:
-                        # 정상 렌더링
                         default_content = weekly_content_map.get((curr_date, period), "진도 계획 없음")
                         display_content = st.session_state.custom_overrides.get(override_key, default_content)
 
@@ -466,12 +431,12 @@ with col_left:
                             st.markdown(
                                 f"<div class='slot-card grade{grade_num} {'overridden' if override_key in st.session_state.custom_overrides else ''}'><div style='font-weight:bold;'>{class_info}반</div></div>",
                                 unsafe_allow_html=True)
-
                             new_val = st.text_input("수정", value=display_content, key=f"in_{override_key}",
                                                     label_visibility="collapsed")
 
-                            st.markdown("<div style='font-size:0.85em; color:#555; margin-top:5px;'>🔄 이동할 위치 (날짜/교시)</div>",
-                                        unsafe_allow_html=True)
+                            st.markdown(
+                                "<div style='font-size:0.85em; color:#555; margin-top:5px;'>🔄 이동할 위치 (날짜/교시)</div>",
+                                unsafe_allow_html=True)
                             move_col1, move_col2 = st.columns([1.5, 1])
                             curr_date_obj = datetime.strptime(curr_date, "%Y-%m-%d").date()
                             new_date = move_col1.date_input("이동 날짜", value=curr_date_obj, key=f"d_{override_key}",
@@ -491,14 +456,13 @@ with col_left:
                                     st.rerun()
                             else:
                                 c1, c2, c3 = st.columns([1.1, 1.1, 1.5])
-
                                 if c1.button("저장", key=f"sv_{override_key}",
-                                             use_container_width=True) or st.session_state.get(f"force_save_{override_key}",
-                                                                                               False):
+                                             use_container_width=True) or st.session_state.get(
+                                        f"force_save_{override_key}", False):
                                     new_date_str = new_date.strftime("%Y-%m-%d")
                                     new_override_key = f"{new_date_str}_{new_period}"
-
                                     is_conflict = False
+
                                     if new_override_key != override_key and not st.session_state.get(
                                             f"force_save_{override_key}", False):
                                         if new_date.weekday() < 5:
@@ -520,11 +484,11 @@ with col_left:
                                                                         "사유": f"🔄 {new_date_str[-5:]} {new_period}교시로 이동"}])
                                             st.session_state.cancels = pd.concat([st.session_state.cancels, new_cancel],
                                                                                  ignore_index=True)
-
                                             st.session_state.custom_overrides[
                                                 new_override_key] = f"[{class_info}] {new_val}"
                                             st.session_state.custom_overrides.pop(override_key, None)
-                                            if override_key in st.session_state.status_data: st.session_state.status_data[
+                                            if override_key in st.session_state.status_data:
+                                            st.session_state.status_data[
                                                 new_override_key] = st.session_state.status_data.pop(override_key)
                                             if override_key in st.session_state.memo_data: st.session_state.memo_data[
                                                 new_override_key] = st.session_state.memo_data.pop(override_key)
@@ -548,11 +512,9 @@ with col_left:
                                     new_cancel = pd.DataFrame([{"날짜": curr_date, "교시": str(period), "사유": "❌ 일정 삭제됨"}])
                                     st.session_state.cancels = pd.concat([st.session_state.cancels, new_cancel],
                                                                          ignore_index=True)
-
                                     st.session_state.custom_overrides.pop(override_key, None)
                                     st.session_state.status_data.pop(override_key, None)
                                     st.session_state.memo_data.pop(override_key, None)
-
                                     save_custom_data()
                                     st.session_state[f"edit_{override_key}"] = False
                                     st.rerun()
