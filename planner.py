@@ -445,7 +445,7 @@ with col_left:
                                     st.session_state[f"confirm_overwrite_{override_key}"] = False
                                     st.rerun()
                             else:
-                                c1, c2, c3 = st.columns([1, 1, 1.4])
+                                c1, c2, c3 = st.columns([1, 1, 1.5])
 
                                 if c1.button("저장", key=f"sv_{override_key}",
                                              use_container_width=True) or st.session_state.get(f"force_save_{override_key}",
