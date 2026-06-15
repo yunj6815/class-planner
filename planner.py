@@ -498,7 +498,7 @@ with col_left:
                                     st.session_state[f"edit_{override_key}"] = False
                                     st.rerun()
 
-                                if c3.button("🗑️ 삭제/휴강", key=f"rs_{override_key}", use_container_width=True):
+                                if c3.button("🗑️ 삭제", key=f"rs_{override_key}", use_container_width=True):
                                     if 'create_backup' in globals(): create_backup()
                                     new_cancel = pd.DataFrame([{"날짜": curr_date, "교시": str(period), "사유": "❌ 일정 삭제됨"}])
                                     st.session_state.cancels = pd.concat([st.session_state.cancels, new_cancel],
