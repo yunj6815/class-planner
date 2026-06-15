@@ -81,7 +81,7 @@ def save_custom_data():
         "status_data": st.session_state.status_data,
         "memo_data": st.session_state.memo_data
     }
-    supabase.table("user_data").upsert(payload).execute()
+    supabase.table("user_data").upsert(payload, on_conflict="user_id").execute()
 
 
 # --- [로그인/회원가입 UI] ---
