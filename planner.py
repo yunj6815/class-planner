@@ -249,9 +249,7 @@ st.markdown("""
         div.element-container button p { font-size: 0.8em !important; }
         .empty-slot { min-height: 70px !important; }
         [data-testid="stSelectbox"] label, [data-testid="stTextInput"] label { display: none; }
-        [data-testid="column"] { min-width: 150px !important; }
-        div[data-testid="stHorizontalBlock"] { overflow-x: auto !important; flex-wrap: nowrap !important; }
-    }    
+        
     [data-testid="column"] { gap: 0.5rem !important; }
 </style>
 """, unsafe_allow_html=True)
