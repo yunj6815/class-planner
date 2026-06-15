@@ -294,15 +294,45 @@ with col_left:
                                unsafe_allow_html=True)
     st.divider()
 
+    # ---------------------------------------------------------
+    # 👇 여기서부터 화면에 시간표를 그려주는 메인 반복문 시작
+    # ---------------------------------------------------------
     for period in range(1, 10):
-        if not any(str(st.session_state.timetable.loc[period, d]).strip() != "" for d in days): continue
+        # 1. 빈 줄(교시)인지 체크: 기본 시간표에 있거나, '이동'해온 데이터가 있으면 그 줄을 표시
+        has_class_in_row = False
+        for i, d in enumerate(days):
+            if str(st.session_state.timetable.loc[period, d]).strip() != "":
+                has_class_in_row = True
+                break
+            # 이동된 수업이 있는지 체크
+            check_key = f"{current_week_dates[i]}_{period}"
+            val = st.session_state.custom_overrides.get(check_key, "")
+            if isinstance(val, str) and val.startswith("[") and "] " in val:
+                has_class_in_row = True
+                break
+
+        if not has_class_in_row: continue
+
         r_cols = st.columns([0.6, 2, 2, 2, 2, 2])
         r_cols[0].markdown(f"<div style='text-align:center; font-weight:bold; margin-top: 35px;'>{period}</div>",
                            unsafe_allow_html=True)
 
         for i, day in enumerate(days):
             curr_date = current_week_dates[i]
-            class_info = str(st.session_state.timetable.loc[period, day]).strip()
+            override_key = f"{curr_date}_{period}"
+
+            # 기본 반 정보
+            base_class_info = str(st.session_state.timetable.loc[period, day]).strip()
+            class_info = base_class_info
+
+            # 2. 다른 곳에서 여기로 이동된 수업인지 판별 (비밀 태그 [반이름] 확인)
+            override_val = st.session_state.custom_overrides.get(override_key, "")
+            is_moved_class = isinstance(override_val, str) and override_val.startswith("[") and "] " in override_val
+
+            if is_moved_class:
+                end_idx = override_val.index("] ")
+                class_info = override_val[1:end_idx]  # 빈칸이어도 반 이름 강제 인식 (예: 204)
+
             with r_cols[i + 1]:
                 if curr_date in [str(d) for d in st.session_state.events["날짜"].values]:
                     if period == 1:
@@ -315,67 +345,74 @@ with col_left:
 
                 if class_info:
                     cancel_match = st.session_state.cancels[
-                        (st.session_state.cancels["날짜"].astype(str) == curr_date) & (
-                                    st.session_state.cancels["교시"].astype(str) == str(period))]
-                    override_key = f"{curr_date}_{period}"
+                        (st.session_state.cancels["날짜"].astype(str) == curr_date) &
+                        (st.session_state.cancels["교시"].astype(str) == str(period))
+                        ]
                     is_editing = st.session_state.get(f"edit_{override_key}", False)
                     grade_num = class_info[0] if class_info[0] in ['1', '2', '3'] else '1'
 
-                    if not cancel_match.empty:
-                        display_content = f"⚠️ {cancel_match.iloc[0]['사유']}"
+                    # 3. 휴강/이동으로 인해 원래 자리가 취소된 경우 (회색 버튼)
+                    if not cancel_match.empty and not is_moved_class:
+                        display_content = f"⚠️ {cancel_match.iloc[-1]['사유']}"
                         st.markdown(f"<span class='edit-anchor grade-{grade_num}'></span>", unsafe_allow_html=True)
                         st.button(f"**{class_info}반**\n\n{display_content}", key=f"btn_{override_key}", disabled=True,
                                   use_container_width=True)
                     else:
+                        # 정상 렌더링
                         default_content = weekly_content_map.get((curr_date, period), "진도 계획 없음")
                         display_content = st.session_state.custom_overrides.get(override_key, default_content)
+
+                        # 화면에 보일 때 [204반] 비밀 태그는 떼고 예쁘게 보여주기
+                        if is_moved_class:
+                            display_content = display_content.replace(f"[{class_info}] ", "", 1)
 
                         if is_editing:
                             st.markdown(
                                 f"<div class='slot-card grade{grade_num} {'overridden' if override_key in st.session_state.custom_overrides else ''}'><div style='font-weight:bold;'>{class_info}반</div></div>",
                                 unsafe_allow_html=True)
 
-                            # 1. 진도 내용 수정창
                             new_val = st.text_input("수정", value=display_content, key=f"in_{override_key}",
                                                     label_visibility="collapsed")
 
-                            # 2. 이동할 날짜와 교시 선택 UI
                             st.markdown(
                                 "<div style='font-size:0.85em; color:#555; margin-top:5px;'>🔄 이동할 위치 (날짜/교시)</div>",
                                 unsafe_allow_html=True)
                             move_col1, move_col2 = st.columns([1.5, 1])
-
-                            # 현재 날짜를 기본값으로 설정
                             curr_date_obj = datetime.strptime(curr_date, "%Y-%m-%d").date()
                             new_date = move_col1.date_input("이동 날짜", value=curr_date_obj, key=f"d_{override_key}",
                                                             label_visibility="collapsed")
                             new_period = move_col2.selectbox("이동 교시", options=list(range(1, 10)), index=period - 1,
                                                              key=f"p_{override_key}", label_visibility="collapsed")
 
-                            # 3. 버튼 영역 (저장 / 취소 / 삭제)
                             c1, c2, c3 = st.columns([1, 1, 1.4])
 
+                            # 4. [저장/이동] 액션
                             if c1.button("저장", key=f"sv_{override_key}", use_container_width=True):
                                 new_date_str = new_date.strftime("%Y-%m-%d")
                                 new_override_key = f"{new_date_str}_{new_period}"
 
-                                # 날짜나 교시가 변경된 경우 (이동 로직)
                                 if new_override_key != override_key:
-                                    # 새 위치에 데이터 복사
-                                    st.session_state.custom_overrides[new_override_key] = new_val
-                                    # 기존 위치의 데이터 삭제
-                                    st.session_state.custom_overrides.pop(override_key, None)
+                                    # 예전 자리는 '결강(이동)' 처리
+                                    new_cancel = pd.DataFrame([{"날짜": curr_date, "교시": str(period),
+                                                                "사유": f"🔄 {new_date_str[-5:]} {new_period}교시로 이동"}])
+                                    st.session_state.cancels = pd.concat([st.session_state.cancels, new_cancel],
+                                                                         ignore_index=True)
 
-                                    # 상태(O/△/X)와 메모도 함께 이동
-                                    if override_key in st.session_state.status_data:
-                                        st.session_state.status_data[
-                                            new_override_key] = st.session_state.status_data.pop(override_key)
-                                    if override_key in st.session_state.memo_data:
-                                        st.session_state.memo_data[new_override_key] = st.session_state.memo_data.pop(
-                                            override_key)
+                                    # 새 자리에 반 태그를 붙여서 저장
+                                    st.session_state.custom_overrides[new_override_key] = f"[{class_info}] {new_val}"
+
+                                    # 기존 데이터 지우기
+                                    st.session_state.custom_overrides.pop(override_key, None)
+                                    if override_key in st.session_state.status_data: st.session_state.status_data[
+                                        new_override_key] = st.session_state.status_data.pop(override_key)
+                                    if override_key in st.session_state.memo_data: st.session_state.memo_data[
+                                        new_override_key] = st.session_state.memo_data.pop(override_key)
                                 else:
-                                    # 위치 변경 없이 내용만 수정한 경우
-                                    st.session_state.custom_overrides[override_key] = new_val
+                                    # 제자리에서 내용만 수정한 경우
+                                    if is_moved_class:
+                                        st.session_state.custom_overrides[override_key] = f"[{class_info}] {new_val}"
+                                    else:
+                                        st.session_state.custom_overrides[override_key] = new_val
 
                                 st.session_state[f"edit_{override_key}"] = False
                                 save_custom_data()
@@ -385,62 +422,40 @@ with col_left:
                                 st.session_state[f"edit_{override_key}"] = False
                                 st.rerun()
 
-                            # 🗑️ 개별 변경 사항 삭제 (원래 상태로 복구)
-                            if c3.button("🗑️ 삭제/복구", key=f"rs_{override_key}", use_container_width=True):
-                                # 해당 칸에 커스텀하게 저장된 모든 데이터(진도, 상태, 메모)를 삭제
+                            # 5. [삭제/휴강] 액션
+                            if c3.button("🗑️ 삭제/휴강", key=f"rs_{override_key}", use_container_width=True):
+                                # 결강 처리하여 화면에서 완전히 없애기 (회색 비활성화 블록으로 변경)
+                                new_cancel = pd.DataFrame([{"날짜": curr_date, "교시": str(period), "사유": "❌ 일정 삭제됨"}])
+                                st.session_state.cancels = pd.concat([st.session_state.cancels, new_cancel],
+                                                                     ignore_index=True)
+
                                 st.session_state.custom_overrides.pop(override_key, None)
                                 st.session_state.status_data.pop(override_key, None)
                                 st.session_state.memo_data.pop(override_key, None)
-
-                                # 위젯에 입력되어 있던 텍스트 및 선택 상자 초기화
-                                if f"in_{override_key}" in st.session_state: del st.session_state[f"in_{override_key}"]
-                                if f"s_{override_key}" in st.session_state: del st.session_state[f"s_{override_key}"]
-                                if f"m_{override_key}" in st.session_state: del st.session_state[f"m_{override_key}"]
 
                                 save_custom_data()
                                 st.session_state[f"edit_{override_key}"] = False
                                 st.rerun()
 
                         else:
-                                # 👇 이 부분이 지워져서 안 보였던 것입니다! (평상시 버튼 렌더링)
-                                st.markdown(
-                                    f"<span class='edit-anchor grade-{grade_num} {'overridden-true' if override_key in st.session_state.custom_overrides else ''}'></span>",
-                                    unsafe_allow_html=True)
-                                if st.button(f"**{class_info}반**\n\n{display_content} ✏️", key=f"btn_{override_key}",
-                                             use_container_width=True):
-                                    st.session_state[f"edit_{override_key}"] = True
-                                    st.rerun()
+                            st.markdown(
+                                f"<span class='edit-anchor grade-{grade_num} {'overridden-true' if override_key in st.session_state.custom_overrides else ''}'></span>",
+                                unsafe_allow_html=True)
+                            if st.button(f"**{class_info}반**\n\n{display_content} ✏️", key=f"btn_{override_key}",
+                                         use_container_width=True):
+                                st.session_state[f"edit_{override_key}"] = True
+                                st.rerun()
 
-
-                    # 👇 이렇게 수정하세요
+                    # O/X 및 메모 로직
                     m_c1, m_c2 = st.columns([1.5, 2])
-
-                    # 현재 저장된 상태 가져오기 (없으면 기본값)
                     curr_status = st.session_state.status_data.get(override_key, "O")
                     curr_memo = st.session_state.memo_data.get(override_key, "")
-
-                    # selectbox의 기본 선택 위치(index) 계산
                     status_options = ["O", "△", "X"]
                     st_idx = status_options.index(curr_status) if curr_status in status_options else 0
 
-                    m_c1.selectbox(
-                        "st",
-                        status_options,
-                        index=st_idx,
-                        key=f"s_{override_key}",
-                        label_visibility="collapsed",
-                        on_change=update_status,  # 값이 바뀌면 콜백 함수 실행
-                        args=(override_key,)  # 콜백 함수에 전달할 키값
-                    )
-
-                    m_c2.text_input(
-                        "m",
-                        value=curr_memo,
-                        key=f"m_{override_key}",
-                        placeholder="메모",
-                        label_visibility="collapsed",
-                        on_change=update_memo,  # 값이 바뀌면 콜백 함수 실행
-                        args=(override_key,)
-                    )
+                    m_c1.selectbox("st", status_options, index=st_idx, key=f"s_{override_key}",
+                                   label_visibility="collapsed", on_change=update_status, args=(override_key,))
+                    m_c2.text_input("m", value=curr_memo, key=f"m_{override_key}", placeholder="메모",
+                                    label_visibility="collapsed", on_change=update_memo, args=(override_key,))
                 else:
                     st.markdown("<div class='empty-slot'></div>", unsafe_allow_html=True)
