@@ -1,9 +1,9 @@
-import copy
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from collections import defaultdict
 from supabase import create_client
+import copy
 
 # 1. 페이지 설정
 st.set_page_config(page_title="스마트 진도표", layout="wide")
@@ -215,6 +215,18 @@ with col_right:
         for g in ["1학년", "2학년", "3학년"]: save_lesson_plan(g)
         save_custom_data()
         st.success("데이터베이스에 저장되었습니다!")
+
+    if st.button("↩️ 방금 한 작업 취소 (Undo)", use_container_width=True):
+        if 'backup' in st.session_state:
+            st.session_state.custom_overrides = copy.deepcopy(st.session_state.backup['custom_overrides'])
+            st.session_state.cancels = st.session_state.backup['cancels'].copy(deep=True)
+            st.session_state.status_data = copy.deepcopy(st.session_state.backup['status_data'])
+            st.session_state.memo_data = copy.deepcopy(st.session_state.backup['memo_data'])
+            save_custom_data()
+            st.success("이전 상태로 복구되었습니다!")
+            st.rerun()
+        else:
+            st.warning("돌아갈 이전 작업 기록이 없습니다.")
 
     with st.expander("📅 학기 및 시간표", expanded=False):
         c1, c2 = st.columns(2)
