@@ -81,7 +81,10 @@ def save_custom_data():
         "status_data": st.session_state.status_data,
         "memo_data": st.session_state.memo_data
     }
-    supabase.table("user_data").upsert(payload, on_conflict="user_id").execute()
+    try:
+        supabase.table("user_data").upsert(payload, on_conflict="user_id").execute()
+    except Exception as e:
+        st.error(f"🚨 DB 저장 실패: {e}")
 
 
 # --- [로그인/회원가입 UI] ---
@@ -350,7 +353,7 @@ with col_left:
                                                              key=f"p_{override_key}", label_visibility="collapsed")
 
                             # 3. 버튼 영역 (저장 / 취소 / 삭제)
-                            c1, c2, c3 = st.columns(3)
+                            c1, c2, c3 = st.columns([1, 1, 1.4])
 
                             if c1.button("저장", key=f"sv_{override_key}", use_container_width=True):
                                 new_date_str = new_date.strftime("%Y-%m-%d")
