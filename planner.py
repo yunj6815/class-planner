@@ -358,7 +358,7 @@ with col_left:
 
 
                     # 👇 이렇게 수정하세요
-                    m_c1, m_c2 = st.columns([1, 2.5])
+                    m_c1, m_c2 = st.columns([1.5, 2])
 
                     # 현재 저장된 상태 가져오기 (없으면 기본값)
                     curr_status = st.session_state.status_data.get(override_key, "O")
