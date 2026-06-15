@@ -245,152 +245,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 레이아웃 분할 (좌측 7.5 : 우측 2.5)
-col_left, col_right = st.columns([7.5, 2.5])
+# 레이아웃 분할 (비율 조정: 우측 공간을 늘려 저장 버튼 글자 깨짐 방지)
+col_left, col_right = st.columns([6.8, 3.2])
 
-# --- [우측: 설정 및 저장] ---
-with col_right:
-    st.subheader("⚙️ 설정 및 저장")
-
-    # 1. 전체 설정 DB 저장 버튼
-    if st.button("💾 전체 설정 저장", type="primary", use_container_width=True):
-        save_settings()
-        for g in ["1학년", "2학년", "3학년"]: save_lesson_plan(g)
-        save_custom_data()
-        st.success("데이터베이스에 저장되었습니다!")
-
-    # 2. 실행 취소 버튼
-    if st.button("↩️ 방금 한 작업 취소 (Undo)", use_container_width=True):
-        if 'backup' in st.session_state:
-            st.session_state.custom_overrides = copy.deepcopy(st.session_state.backup['custom_overrides'])
-            st.session_state.cancels = st.session_state.backup['cancels'].copy(deep=True)
-            st.session_state.status_data = copy.deepcopy(st.session_state.backup['status_data'])
-            st.session_state.memo_data = copy.deepcopy(st.session_state.backup['memo_data'])
-            save_custom_data()
-            st.success("이전 상태로 복구되었습니다!")
-            st.rerun()
-        else:
-            st.warning("돌아갈 이전 작업 기록이 없습니다.")
-
-    st.divider()
-
-    # ⭐ [신규 기능 1] 📊 반별 진도 격차 대시보드 (교수님 취향 저격용)
-    with st.expander("📊 반별 진도 현황 대시보드", expanded=True):
-        st.write("현재 주차 기준, 학년별/반별로 진행된 **누적 수업 차시** 비교입니다.")
-
-        # 주차 선택 데이터가 로드된 이후에 계산하기 위해 안전장치 후 계산
-        if 'current_class_indices' in locals() or 'current_class_indices' in globals():
-            # 보기 좋게 학년별로 분리해서 진행 상황 바(Bar) 표시
-            for grade_name in ["1학년", "2학년", "3학년"]:
-                st.markdown(f"**🔹 {grade_name}**")
-
-                # 현재 학년에 해당하는 반들만 필터링
-                grade_classes = [c for c in current_class_indices.keys() if c.startswith(grade_name[0])]
-
-                if not grade_classes:
-                    st.caption("등록된 수업이 없습니다.")
-                else:
-                    for cls in sorted(grade_classes):
-                        current_idx = current_class_indices[cls]
-                        # 최대 100차시 기준으로 진행률 계산 (디자인용)
-                        progress_val = min(current_idx / 40.0, 1.0)
-
-                        col_cls_name, col_cls_bar = st.columns([1, 3])
-                        col_cls_name.markdown(f"<div style='font-size:0.9em; margin-top:5px;'>{cls}반</div>",
-                                              unsafe_allow_html=True)
-                        col_cls_bar.progress(progress_val, text=f"**{current_idx}차시** 완료")
-        else:
-            st.info("좌측에서 주차를 선택하면 대시보드가 활성화됩니다.")
-
-    st.divider()
-
-    # ⭐ [신규 기능 2] 💾 나이스(NEIS) 제출용 엑셀 다운로드 기능
-    with st.expander("📥 나이스(NEIS) 진도표 내보내기", expanded=False):
-        st.write("현재까지 누적된 반별 실제 진도 인덱스와 메모를 나이스 입력 양식(Excel)으로 추출합니다.")
-
-        # 엑셀 파일 변환 로직
-        export_data = []
-        for (c_date, c_period), c_content in weekly_content_map.items():
-            day_idx = datetime.strptime(c_date, "%Y-%m-%d").weekday()
-            c_day = ["월", "화", "수", "목", "금"][day_idx]
-            c_class = str(st.session_state.timetable.loc[c_period, c_day]).strip()
-
-            if c_class:
-                o_key = f"{c_date}_{c_period}"
-                # 수정된 내용이 있다면 반영
-                final_content = st.session_state.custom_overrides.get(o_key, c_content)
-                if isinstance(final_content, str) and final_content.startswith("["):
-                    if "] " in final_content:
-                        final_content = final_content.split("] ", 1)[1]
-
-                export_data.append({
-                    "날짜": c_date,
-                    "요일": c_day,
-                    "교시": f"{c_period}교시",
-                    "대상 학급": f"{c_class}반",
-                    "실제 진행 진도 내용": final_content,
-                    "이행 상태": st.session_state.status_data.get(o_key, "O"),
-                    "비고(메모)": st.session_state.memo_data.get(o_key, "")
-                })
-
-        if export_data:
-            df_export = pd.DataFrame(export_data).sort_values(by=["날짜", "교시"])
-
-            # Streamlit에서 엑셀을 다운로드하기 위한 바이너리 버퍼 생성
-            import io
-
-            towrite = io.BytesIO()
-            with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
-                df_export.to_excel(writer, index=False, sheet_name='나이스_진도표_제출용')
-            towrite.seek(0)
-
-            st.download_button(
-                label="🟢 나이스용 Excel 다운로드",
-                data=towrite,
-                file_name=f"NEIS_진도표_백업_{datetime.now().strftime('%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-        else:
-            st.caption("현재 주차에 출력할 진도 데이터가 없습니다.")
-
-    st.divider()
-
-    # 3. 기존 하단 접힘 메뉴들 (학기 설정, 진도 계획, 일정 변경 폼)
-    with st.expander("📅 학기 및 시간표", expanded=False):
-        c1, c2 = st.columns(2)
-        st.session_state.start_date = c1.date_input("시작일", st.session_state.start_date)
-        st.session_state.end_date = c2.date_input("종료일", st.session_state.end_date)
-        st.session_state.timetable = st.data_editor(st.session_state.timetable, use_container_width=True)
-
-    with st.expander("📚 학년별 진도 계획", expanded=False):  # 공간 확보를 위해 기본 접힘(False) 처리 추천
-        tabs = st.tabs(["1학년", "2학년", "3학년"])
-        for i, g in enumerate(["1학년", "2학년", "3학년"]):
-            with tabs[i]:
-                st.session_state.lesson_plans_dict[g] = st.data_editor(st.session_state.lesson_plans_dict[g],
-                                                                       num_rows="dynamic", use_container_width=True,
-                                                                       key=f"p_{g}")
-
-    with st.expander("🚨 일정 변경 (행사/결강)", expanded=True):
-        with st.form("event_cancel_form"):
-            header_col1, header_col2 = st.columns([6, 4])  # 지난번에 맞춘 6:4 비율 유지!
-            with header_col1:
-                st.write("**[전일 행사]**")
-            with header_col2:
-                submitted = st.form_submit_button("✅ 전체 저장", type="primary", use_container_width=True)
-
-            temp_events = st.data_editor(st.session_state.events, num_rows="dynamic", use_container_width=True,
-                                         key="ev_form")
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.write("**[특정 교시 결강]**")
-            temp_cancels = st.data_editor(st.session_state.cancels, num_rows="dynamic", use_container_width=True,
-                                          key="ca_form")
-
-            if submitted:
-                st.session_state.events = temp_events
-                st.session_state.cancels = temp_cancels
-                save_custom_data()
-                st.rerun()
+# ==========================================
+# 👇 수정된 부분: col_left 블록이 위로 올라왔습니다!
+# ==========================================
 
 # --- [좌측: 스마트 진도표 메인 화면] ---
 with col_left:
@@ -620,3 +480,142 @@ with col_left:
                                     label_visibility="collapsed", on_change=update_memo, args=(override_key,))
                 else:
                     st.markdown("<div class='empty-slot'></div>", unsafe_allow_html=True)
+
+# ==========================================
+# 👇 여기서부터 col_right 블록입니다! (순서가 뒤로 밀림)
+# ==========================================
+
+# --- [우측: 설정 및 저장] ---
+with col_right:
+    st.subheader("⚙️ 설정 및 저장")
+
+    if st.button("💾 전체 설정 저장", type="primary", use_container_width=True):
+        save_settings()
+        for g in ["1학년", "2학년", "3학년"]: save_lesson_plan(g)
+        save_custom_data()
+        st.success("데이터베이스에 저장되었습니다!")
+
+    if st.button("↩️ 방금 한 작업 취소 (Undo)", use_container_width=True):
+        if 'backup' in st.session_state:
+            st.session_state.custom_overrides = copy.deepcopy(st.session_state.backup['custom_overrides'])
+            st.session_state.cancels = st.session_state.backup['cancels'].copy(deep=True)
+            st.session_state.status_data = copy.deepcopy(st.session_state.backup['status_data'])
+            st.session_state.memo_data = copy.deepcopy(st.session_state.backup['memo_data'])
+            save_custom_data()
+            st.success("이전 상태로 복구되었습니다!")
+            st.rerun()
+        else:
+            st.warning("돌아갈 이전 작업 기록이 없습니다.")
+
+    st.divider()
+
+    # ⭐ [신규 기능 1] 📊 반별 진도 격차 대시보드
+    with st.expander("📊 반별 진도 현황 대시보드", expanded=True):
+        st.write("현재 주차 기준, 학년별/반별로 진행된 **누적 수업 차시** 비교입니다.")
+
+        if 'current_class_indices' in locals() or 'current_class_indices' in globals():
+            for grade_name in ["1학년", "2학년", "3학년"]:
+                st.markdown(f"**🔹 {grade_name}**")
+
+                grade_classes = [c for c in current_class_indices.keys() if c.startswith(grade_name[0])]
+
+                if not grade_classes:
+                    st.caption("등록된 수업이 없습니다.")
+                else:
+                    for cls in sorted(grade_classes):
+                        current_idx = current_class_indices[cls]
+                        progress_val = min(current_idx / 40.0, 1.0)
+
+                        col_cls_name, col_cls_bar = st.columns([1, 3])
+                        col_cls_name.markdown(f"<div style='font-size:0.9em; margin-top:5px;'>{cls}반</div>",
+                                              unsafe_allow_html=True)
+                        col_cls_bar.progress(progress_val, text=f"**{current_idx}차시** 완료")
+        else:
+            st.info("좌측에서 주차를 선택하면 대시보드가 활성화됩니다.")
+
+    st.divider()
+
+    # ⭐ [신규 기능 2] 💾 나이스(NEIS) 제출용 엑셀 다운로드 기능
+    with st.expander("📥 나이스(NEIS) 진도표 내보내기", expanded=False):
+        st.write("현재까지 누적된 반별 실제 진도 인덱스와 메모를 나이스 입력 양식(Excel)으로 추출합니다.")
+
+        export_data = []
+        if 'weekly_content_map' in locals() or 'weekly_content_map' in globals():
+            for (c_date, c_period), c_content in weekly_content_map.items():
+                day_idx = datetime.strptime(c_date, "%Y-%m-%d").weekday()
+                c_day = ["월", "화", "수", "목", "금"][day_idx]
+                c_class = str(st.session_state.timetable.loc[c_period, c_day]).strip()
+
+                if c_class:
+                    o_key = f"{c_date}_{c_period}"
+                    final_content = st.session_state.custom_overrides.get(o_key, c_content)
+                    if isinstance(final_content, str) and final_content.startswith("["):
+                        if "] " in final_content:
+                            final_content = final_content.split("] ", 1)[1]
+
+                    export_data.append({
+                        "날짜": c_date,
+                        "요일": c_day,
+                        "교시": f"{c_period}교시",
+                        "대상 학급": f"{c_class}반",
+                        "실제 진행 진도 내용": final_content,
+                        "이행 상태": st.session_state.status_data.get(o_key, "O"),
+                        "비고(메모)": st.session_state.memo_data.get(o_key, "")
+                    })
+
+        if export_data:
+            df_export = pd.DataFrame(export_data).sort_values(by=["날짜", "교시"])
+
+            import io
+
+            towrite = io.BytesIO()
+            with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
+                df_export.to_excel(writer, index=False, sheet_name='나이스_진도표_제출용')
+            towrite.seek(0)
+
+            st.download_button(
+                label="🟢 나이스용 Excel 다운로드",
+                data=towrite,
+                file_name=f"NEIS_진도표_백업_{datetime.now().strftime('%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        else:
+            st.caption("현재 주차에 출력할 진도 데이터가 없습니다.")
+
+    st.divider()
+
+    with st.expander("📅 학기 및 시간표", expanded=False):
+        c1, c2 = st.columns(2)
+        st.session_state.start_date = c1.date_input("시작일", st.session_state.start_date)
+        st.session_state.end_date = c2.date_input("종료일", st.session_state.end_date)
+        st.session_state.timetable = st.data_editor(st.session_state.timetable, use_container_width=True)
+
+    with st.expander("📚 학년별 진도 계획", expanded=False):
+        tabs = st.tabs(["1학년", "2학년", "3학년"])
+        for i, g in enumerate(["1학년", "2학년", "3학년"]):
+            with tabs[i]:
+                st.session_state.lesson_plans_dict[g] = st.data_editor(st.session_state.lesson_plans_dict[g],
+                                                                       num_rows="dynamic", use_container_width=True,
+                                                                       key=f"p_{g}")
+
+    with st.expander("🚨 일정 변경 (행사/결강)", expanded=True):
+        with st.form("event_cancel_form"):
+            header_col1, header_col2 = st.columns([5, 5])
+            with header_col1:
+                st.write("**[전일 행사]**")
+            with header_col2:
+                submitted = st.form_submit_button("✅ 전체 저장", type="primary", use_container_width=True)
+
+            temp_events = st.data_editor(st.session_state.events, num_rows="dynamic", use_container_width=True,
+                                         key="ev_form")
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.write("**[특정 교시 결강]**")
+            temp_cancels = st.data_editor(st.session_state.cancels, num_rows="dynamic", use_container_width=True,
+                                          key="ca_form")
+
+            if submitted:
+                st.session_state.events = temp_events
+                st.session_state.cancels = temp_cancels
+                save_custom_data()
+                st.rerun()
