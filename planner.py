@@ -196,17 +196,50 @@ st.markdown("""
     div.element-container:has(span.grade-2) + div.element-container button { background-color: #e5f5e0 !important; border-top: 4px solid #a1d99b !important; }
     div.element-container:has(span.grade-3) + div.element-container button { background-color: #eff3ff !important; border-top: 4px solid #9ecae1 !important; }
     div.element-container:has(span.overridden-true) + div.element-container button { border-left: 3px solid #ff1493 !important; div.element-container:has(span.disabled-slot) + div.element-container button { 
+    div.element-container:has(span.disabled-slot) + div.element-container button { 
         background-color: #f8f9fa !important;
         border: 1px solid #e9ecef !important;
         border-top: none !important;
         color: #adb5bd !important;
         box-shadow: none !important;}
+        @media screen and (max-width: 768px) {
+        /* 1. 화면 양옆 여백을 팍 줄여서 공간 확보 */
+        .block-container { padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 2rem !important; }
+        
+        /* 2. 수업 카드 크기와 글자 축소 */
+        .slot-card { min-height: 60px !important; padding: 5px !important; font-size: 0.85em !important; }
+        div.element-container button { min-height: 60px !important; padding: 5px !important; }
+        div.element-container button p { font-size: 0.8em !important; }
+        
+        /* 3. 빈 시간표 칸 높이 줄이기 */
+        .empty-slot { min-height: 70px !important; }
+        
+        /* 4. O/△/X 와 메모 칸 여백 축소 */
+        [data-testid="stSelectbox"] label, [data-testid="stTextInput"] label { display: none; }
+    }
+        /* 5. 가로 스크롤 허용 (필요시 추가) */
+        [data-testid="column"] { min-width: 150px !important; }
+        div[data-testid="stHorizontalBlock"] { overflow-x: auto !important; flex-wrap: nowrap !important; }
+    }    
 
     [data-testid="column"] { gap: 0.5rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
-col_left, col_right = st.columns([7, 3])
+# 기존 컬럼(col_left, col_right)을 지우고 탭으로 변경
+tab_main, tab_setting = st.tabs(["📅 스마트 진도표", "⚙️ 설정 및 저장"])
+
+with tab_setting:
+    # 기존 col_right 안에 있던 모든 내용 (저장 버튼, 실행 취소 버튼, 학기 설정, 일정 변경 폼 등)을
+    # 이 안으로 들여쓰기 해서 넣습니다.
+    st.subheader("⚙️ 설정 및 저장")
+    # ... 생략 ...
+
+with tab_main:
+    # 기존 col_left 안에 있던 모든 내용 (주차 선택, 시간표 렌더링 등)을
+    # 이 안으로 들여쓰기 해서 넣습니다.
+    all_weeks = get_all_weeks(st.session_state.start_date, st.session_state.end_date)
+    # ... 생략 ...
 
 with col_right:
     st.subheader("⚙️ 설정 및 저장")
