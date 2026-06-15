@@ -309,186 +309,186 @@ with col_left:
     # ---------------------------------------------------------
     # 👇 여기서부터 화면에 시간표를 그려주는 메인 반복문 시작
     # ---------------------------------------------------------
-for period in range(1, 10):
-    # 1. 빈 줄(교시)인지 체크: 기본 시간표에 있거나, '이동'해온 데이터가 있으면 그 줄을 표시
-    has_class_in_row = False
-    for i, d in enumerate(days):
-        if str(st.session_state.timetable.loc[period, d]).strip() != "":
-            has_class_in_row = True
-            break
-        # 이동된 수업이 있는지 체크
-        check_key = f"{current_week_dates[i]}_{period}"
-        val = st.session_state.custom_overrides.get(check_key, "")
-        if isinstance(val, str) and val.startswith("[") and "] " in val:
-            has_class_in_row = True
-            break
+    for period in range(1, 10):
+        # 1. 빈 줄(교시)인지 체크: 기본 시간표에 있거나, '이동'해온 데이터가 있으면 그 줄을 표시
+        has_class_in_row = False
+        for i, d in enumerate(days):
+            if str(st.session_state.timetable.loc[period, d]).strip() != "":
+                has_class_in_row = True
+                break
+            # 이동된 수업이 있는지 체크
+            check_key = f"{current_week_dates[i]}_{period}"
+            val = st.session_state.custom_overrides.get(check_key, "")
+            if isinstance(val, str) and val.startswith("[") and "] " in val:
+                has_class_in_row = True
+                break
 
-    if not has_class_in_row: continue
+        if not has_class_in_row: continue
 
-    r_cols = st.columns([0.6, 2, 2, 2, 2, 2])
-    r_cols[0].markdown(f"<div style='text-align:center; font-weight:bold; margin-top: 35px;'>{period}</div>",
-                       unsafe_allow_html=True)
+        r_cols = st.columns([0.6, 2, 2, 2, 2, 2])
+        r_cols[0].markdown(f"<div style='text-align:center; font-weight:bold; margin-top: 35px;'>{period}</div>",
+                           unsafe_allow_html=True)
 
-    for i, day in enumerate(days):
-        curr_date = current_week_dates[i]
-        override_key = f"{curr_date}_{period}"
+        for i, day in enumerate(days):
+            curr_date = current_week_dates[i]
+            override_key = f"{curr_date}_{period}"
 
-        # 기본 반 정보
-        base_class_info = str(st.session_state.timetable.loc[period, day]).strip()
-        class_info = base_class_info
+            # 기본 반 정보
+            base_class_info = str(st.session_state.timetable.loc[period, day]).strip()
+            class_info = base_class_info
 
-        # 2. 다른 곳에서 여기로 이동된 수업인지 판별 (비밀 태그 [반이름] 확인)
-        override_val = st.session_state.custom_overrides.get(override_key, "")
-        is_moved_class = isinstance(override_val, str) and override_val.startswith("[") and "] " in override_val
+            # 2. 다른 곳에서 여기로 이동된 수업인지 판별 (비밀 태그 [반이름] 확인)
+            override_val = st.session_state.custom_overrides.get(override_key, "")
+            is_moved_class = isinstance(override_val, str) and override_val.startswith("[") and "] " in override_val
 
-        if is_moved_class:
-            end_idx = override_val.index("] ")
-            class_info = override_val[1:end_idx]  # 빈칸이어도 반 이름 강제 인식 (예: 204)
+            if is_moved_class:
+                end_idx = override_val.index("] ")
+                class_info = override_val[1:end_idx]  # 빈칸이어도 반 이름 강제 인식 (예: 204)
 
-        with r_cols[i + 1]:
-            if curr_date in [str(d) for d in st.session_state.events["날짜"].values]:
-                if period == 1:
-                    ev_name = \
-                    st.session_state.events[st.session_state.events["날짜"].astype(str) == curr_date]["행사명"].values[0]
-                    st.markdown(
-                        f"<div style='color:red; font-weight:bold; text-align:center; margin-top:30px;'>🚩 {ev_name}</div>",
-                        unsafe_allow_html=True)
-                continue
-
-            if class_info:
-                cancel_match = st.session_state.cancels[
-                    (st.session_state.cancels["날짜"].astype(str) == curr_date) &
-                    (st.session_state.cancels["교시"].astype(str) == str(period))
-                    ]
-                is_editing = st.session_state.get(f"edit_{override_key}", False)
-                grade_num = class_info[0] if class_info[0] in ['1', '2', '3'] else '1'
-
-                # 3. 휴강/이동으로 인해 원래 자리가 취소된 경우 (회색 버튼)
-                if not cancel_match.empty and not is_moved_class:
-                    display_content = f"⚠️ {cancel_match.iloc[-1]['사유']}"
-                    st.markdown("<span class='edit-anchor disabled-slot'></span>", unsafe_allow_html=True)
-                    st.button(f"**{class_info}반**\n\n{display_content}", key=f"btn_{override_key}", disabled=True,
-                              use_container_width=True)
-                else:
-                    # 정상 렌더링
-                    default_content = weekly_content_map.get((curr_date, period), "진도 계획 없음")
-                    display_content = st.session_state.custom_overrides.get(override_key, default_content)
-
-                    if is_moved_class:
-                        display_content = display_content.replace(f"[{class_info}] ", "", 1)
-
-                    if is_editing:
+            with r_cols[i + 1]:
+                if curr_date in [str(d) for d in st.session_state.events["날짜"].values]:
+                    if period == 1:
+                        ev_name = \
+                        st.session_state.events[st.session_state.events["날짜"].astype(str) == curr_date]["행사명"].values[0]
                         st.markdown(
-                            f"<div class='slot-card grade{grade_num} {'overridden' if override_key in st.session_state.custom_overrides else ''}'><div style='font-weight:bold;'>{class_info}반</div></div>",
+                            f"<div style='color:red; font-weight:bold; text-align:center; margin-top:30px;'>🚩 {ev_name}</div>",
                             unsafe_allow_html=True)
+                    continue
 
-                        new_val = st.text_input("수정", value=display_content, key=f"in_{override_key}",
-                                                label_visibility="collapsed")
+                if class_info:
+                    cancel_match = st.session_state.cancels[
+                        (st.session_state.cancels["날짜"].astype(str) == curr_date) &
+                        (st.session_state.cancels["교시"].astype(str) == str(period))
+                        ]
+                    is_editing = st.session_state.get(f"edit_{override_key}", False)
+                    grade_num = class_info[0] if class_info[0] in ['1', '2', '3'] else '1'
 
-                        st.markdown("<div style='font-size:0.85em; color:#555; margin-top:5px;'>🔄 이동할 위치 (날짜/교시)</div>",
-                                    unsafe_allow_html=True)
-                        move_col1, move_col2 = st.columns([1.5, 1])
-                        curr_date_obj = datetime.strptime(curr_date, "%Y-%m-%d").date()
-                        new_date = move_col1.date_input("이동 날짜", value=curr_date_obj, key=f"d_{override_key}",
-                                                        label_visibility="collapsed")
-                        new_period = move_col2.selectbox("이동 교시", options=list(range(1, 10)), index=period - 1,
-                                                         key=f"p_{override_key}", label_visibility="collapsed")
-
-                        if st.session_state.get(f"confirm_overwrite_{override_key}", False):
-                            st.warning("⚠️ 이동하려는 위치에 이미 일정이 있습니다. 덮어쓰시겠습니까?")
-                            cw1, cw2 = st.columns(2)
-                            if cw1.button("네, 덮어씁니다", key=f"yes_{override_key}", type="primary"):
-                                st.session_state[f"confirm_overwrite_{override_key}"] = False
-                                st.session_state[f"force_save_{override_key}"] = True
-                                st.rerun()
-                            if cw2.button("아니오", key=f"no_{override_key}"):
-                                st.session_state[f"confirm_overwrite_{override_key}"] = False
-                                st.rerun()
-                        else:
-                            c1, c2, c3 = st.columns([1, 1, 1.4])
-
-                            if c1.button("저장", key=f"sv_{override_key}",
-                                         use_container_width=True) or st.session_state.get(f"force_save_{override_key}",
-                                                                                           False):
-                                new_date_str = new_date.strftime("%Y-%m-%d")
-                                new_override_key = f"{new_date_str}_{new_period}"
-
-                                is_conflict = False
-                                if new_override_key != override_key and not st.session_state.get(
-                                        f"force_save_{override_key}", False):
-                                    if new_date.weekday() < 5:
-                                        target_day_name = days[new_date.weekday()]
-                                        target_base = str(
-                                            st.session_state.timetable.loc[new_period, target_day_name]).strip()
-                                        if target_base != "" or new_override_key in st.session_state.custom_overrides:
-                                            is_conflict = True
-
-                                if is_conflict:
-                                    st.session_state[f"confirm_overwrite_{override_key}"] = True
-                                    st.rerun()
-                                else:
-                                    if 'create_backup' in globals(): create_backup()
-                                    st.session_state[f"force_save_{override_key}"] = False
-
-                                    if new_override_key != override_key:
-                                        new_cancel = pd.DataFrame([{"날짜": curr_date, "교시": str(period),
-                                                                    "사유": f"🔄 {new_date_str[-5:]} {new_period}교시로 이동"}])
-                                        st.session_state.cancels = pd.concat([st.session_state.cancels, new_cancel],
-                                                                             ignore_index=True)
-
-                                        st.session_state.custom_overrides[
-                                            new_override_key] = f"[{class_info}] {new_val}"
-                                        st.session_state.custom_overrides.pop(override_key, None)
-                                        if override_key in st.session_state.status_data: st.session_state.status_data[
-                                            new_override_key] = st.session_state.status_data.pop(override_key)
-                                        if override_key in st.session_state.memo_data: st.session_state.memo_data[
-                                            new_override_key] = st.session_state.memo_data.pop(override_key)
-                                    else:
-                                        if is_moved_class:
-                                            st.session_state.custom_overrides[
-                                                override_key] = f"[{class_info}] {new_val}"
-                                        else:
-                                            st.session_state.custom_overrides[override_key] = new_val
-
-                                    st.session_state[f"edit_{override_key}"] = False
-                                    save_custom_data()
-                                    st.rerun()
-
-                            if c2.button("취소", key=f"cc_{override_key}", use_container_width=True):
-                                st.session_state[f"edit_{override_key}"] = False
-                                st.rerun()
-
-                            if c3.button("🗑️ 삭제/휴강", key=f"rs_{override_key}", use_container_width=True):
-                                if 'create_backup' in globals(): create_backup()
-                                new_cancel = pd.DataFrame([{"날짜": curr_date, "교시": str(period), "사유": "❌ 일정 삭제됨"}])
-                                st.session_state.cancels = pd.concat([st.session_state.cancels, new_cancel],
-                                                                     ignore_index=True)
-
-                                st.session_state.custom_overrides.pop(override_key, None)
-                                st.session_state.status_data.pop(override_key, None)
-                                st.session_state.memo_data.pop(override_key, None)
-
-                                save_custom_data()
-                                st.session_state[f"edit_{override_key}"] = False
-                                st.rerun()
+                    # 3. 휴강/이동으로 인해 원래 자리가 취소된 경우 (회색 버튼)
+                    if not cancel_match.empty and not is_moved_class:
+                        display_content = f"⚠️ {cancel_match.iloc[-1]['사유']}"
+                        st.markdown("<span class='edit-anchor disabled-slot'></span>", unsafe_allow_html=True)
+                        st.button(f"**{class_info}반**\n\n{display_content}", key=f"btn_{override_key}", disabled=True,
+                                  use_container_width=True)
                     else:
-                        st.markdown(
-                            f"<span class='edit-anchor grade-{grade_num} {'overridden-true' if override_key in st.session_state.custom_overrides else ''}'></span>",
-                            unsafe_allow_html=True)
-                        if st.button(f"**{class_info}반**\n\n{display_content} ✏️", key=f"btn_{override_key}",
-                                     use_container_width=True):
-                            st.session_state[f"edit_{override_key}"] = True
-                            st.rerun()
+                        # 정상 렌더링
+                        default_content = weekly_content_map.get((curr_date, period), "진도 계획 없음")
+                        display_content = st.session_state.custom_overrides.get(override_key, default_content)
 
-                m_c1, m_c2 = st.columns([1.5, 2])
-                curr_status = st.session_state.status_data.get(override_key, "O")
-                curr_memo = st.session_state.memo_data.get(override_key, "")
-                status_options = ["O", "△", "X"]
-                st_idx = status_options.index(curr_status) if curr_status in status_options else 0
+                        if is_moved_class:
+                            display_content = display_content.replace(f"[{class_info}] ", "", 1)
 
-                m_c1.selectbox("st", status_options, index=st_idx, key=f"s_{override_key}",
-                               label_visibility="collapsed", on_change=update_status, args=(override_key,))
-                m_c2.text_input("m", value=curr_memo, key=f"m_{override_key}", placeholder="메모",
-                                label_visibility="collapsed", on_change=update_memo, args=(override_key,))
-            else:
-                st.markdown("<div class='empty-slot'></div>", unsafe_allow_html=True)
+                        if is_editing:
+                            st.markdown(
+                                f"<div class='slot-card grade{grade_num} {'overridden' if override_key in st.session_state.custom_overrides else ''}'><div style='font-weight:bold;'>{class_info}반</div></div>",
+                                unsafe_allow_html=True)
+
+                            new_val = st.text_input("수정", value=display_content, key=f"in_{override_key}",
+                                                    label_visibility="collapsed")
+
+                            st.markdown("<div style='font-size:0.85em; color:#555; margin-top:5px;'>🔄 이동할 위치 (날짜/교시)</div>",
+                                        unsafe_allow_html=True)
+                            move_col1, move_col2 = st.columns([1.5, 1])
+                            curr_date_obj = datetime.strptime(curr_date, "%Y-%m-%d").date()
+                            new_date = move_col1.date_input("이동 날짜", value=curr_date_obj, key=f"d_{override_key}",
+                                                            label_visibility="collapsed")
+                            new_period = move_col2.selectbox("이동 교시", options=list(range(1, 10)), index=period - 1,
+                                                             key=f"p_{override_key}", label_visibility="collapsed")
+
+                            if st.session_state.get(f"confirm_overwrite_{override_key}", False):
+                                st.warning("⚠️ 이동하려는 위치에 이미 일정이 있습니다. 덮어쓰시겠습니까?")
+                                cw1, cw2 = st.columns(2)
+                                if cw1.button("네, 덮어씁니다", key=f"yes_{override_key}", type="primary"):
+                                    st.session_state[f"confirm_overwrite_{override_key}"] = False
+                                    st.session_state[f"force_save_{override_key}"] = True
+                                    st.rerun()
+                                if cw2.button("아니오", key=f"no_{override_key}"):
+                                    st.session_state[f"confirm_overwrite_{override_key}"] = False
+                                    st.rerun()
+                            else:
+                                c1, c2, c3 = st.columns([1, 1, 1.4])
+
+                                if c1.button("저장", key=f"sv_{override_key}",
+                                             use_container_width=True) or st.session_state.get(f"force_save_{override_key}",
+                                                                                               False):
+                                    new_date_str = new_date.strftime("%Y-%m-%d")
+                                    new_override_key = f"{new_date_str}_{new_period}"
+
+                                    is_conflict = False
+                                    if new_override_key != override_key and not st.session_state.get(
+                                            f"force_save_{override_key}", False):
+                                        if new_date.weekday() < 5:
+                                            target_day_name = days[new_date.weekday()]
+                                            target_base = str(
+                                                st.session_state.timetable.loc[new_period, target_day_name]).strip()
+                                            if target_base != "" or new_override_key in st.session_state.custom_overrides:
+                                                is_conflict = True
+
+                                    if is_conflict:
+                                        st.session_state[f"confirm_overwrite_{override_key}"] = True
+                                        st.rerun()
+                                    else:
+                                        if 'create_backup' in globals(): create_backup()
+                                        st.session_state[f"force_save_{override_key}"] = False
+
+                                        if new_override_key != override_key:
+                                            new_cancel = pd.DataFrame([{"날짜": curr_date, "교시": str(period),
+                                                                        "사유": f"🔄 {new_date_str[-5:]} {new_period}교시로 이동"}])
+                                            st.session_state.cancels = pd.concat([st.session_state.cancels, new_cancel],
+                                                                                 ignore_index=True)
+
+                                            st.session_state.custom_overrides[
+                                                new_override_key] = f"[{class_info}] {new_val}"
+                                            st.session_state.custom_overrides.pop(override_key, None)
+                                            if override_key in st.session_state.status_data: st.session_state.status_data[
+                                                new_override_key] = st.session_state.status_data.pop(override_key)
+                                            if override_key in st.session_state.memo_data: st.session_state.memo_data[
+                                                new_override_key] = st.session_state.memo_data.pop(override_key)
+                                        else:
+                                            if is_moved_class:
+                                                st.session_state.custom_overrides[
+                                                    override_key] = f"[{class_info}] {new_val}"
+                                            else:
+                                                st.session_state.custom_overrides[override_key] = new_val
+
+                                        st.session_state[f"edit_{override_key}"] = False
+                                        save_custom_data()
+                                        st.rerun()
+
+                                if c2.button("취소", key=f"cc_{override_key}", use_container_width=True):
+                                    st.session_state[f"edit_{override_key}"] = False
+                                    st.rerun()
+
+                                if c3.button("🗑️ 삭제/휴강", key=f"rs_{override_key}", use_container_width=True):
+                                    if 'create_backup' in globals(): create_backup()
+                                    new_cancel = pd.DataFrame([{"날짜": curr_date, "교시": str(period), "사유": "❌ 일정 삭제됨"}])
+                                    st.session_state.cancels = pd.concat([st.session_state.cancels, new_cancel],
+                                                                         ignore_index=True)
+
+                                    st.session_state.custom_overrides.pop(override_key, None)
+                                    st.session_state.status_data.pop(override_key, None)
+                                    st.session_state.memo_data.pop(override_key, None)
+
+                                    save_custom_data()
+                                    st.session_state[f"edit_{override_key}"] = False
+                                    st.rerun()
+                        else:
+                            st.markdown(
+                                f"<span class='edit-anchor grade-{grade_num} {'overridden-true' if override_key in st.session_state.custom_overrides else ''}'></span>",
+                                unsafe_allow_html=True)
+                            if st.button(f"**{class_info}반**\n\n{display_content} ✏️", key=f"btn_{override_key}",
+                                         use_container_width=True):
+                                st.session_state[f"edit_{override_key}"] = True
+                                st.rerun()
+
+                    m_c1, m_c2 = st.columns([1.5, 2])
+                    curr_status = st.session_state.status_data.get(override_key, "O")
+                    curr_memo = st.session_state.memo_data.get(override_key, "")
+                    status_options = ["O", "△", "X"]
+                    st_idx = status_options.index(curr_status) if curr_status in status_options else 0
+
+                    m_c1.selectbox("st", status_options, index=st_idx, key=f"s_{override_key}",
+                                   label_visibility="collapsed", on_change=update_status, args=(override_key,))
+                    m_c2.text_input("m", value=curr_memo, key=f"m_{override_key}", placeholder="메모",
+                                    label_visibility="collapsed", on_change=update_memo, args=(override_key,))
+                else:
+                    st.markdown("<div class='empty-slot'></div>", unsafe_allow_html=True)
