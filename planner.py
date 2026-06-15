@@ -331,29 +331,71 @@ with col_left:
                             st.markdown(
                                 f"<div class='slot-card grade{grade_num} {'overridden' if override_key in st.session_state.custom_overrides else ''}'><div style='font-weight:bold;'>{class_info}반</div></div>",
                                 unsafe_allow_html=True)
+
+                            # 1. 진도 내용 수정창
                             new_val = st.text_input("수정", value=display_content, key=f"in_{override_key}",
                                                     label_visibility="collapsed")
+
+                            # 2. 이동할 날짜와 교시 선택 UI
+                            st.markdown(
+                                "<div style='font-size:0.85em; color:#555; margin-top:5px;'>🔄 이동할 위치 (날짜/교시)</div>",
+                                unsafe_allow_html=True)
+                            move_col1, move_col2 = st.columns([1.5, 1])
+
+                            # 현재 날짜를 기본값으로 설정
+                            curr_date_obj = datetime.strptime(curr_date, "%Y-%m-%d").date()
+                            new_date = move_col1.date_input("이동 날짜", value=curr_date_obj, key=f"d_{override_key}",
+                                                            label_visibility="collapsed")
+                            new_period = move_col2.selectbox("이동 교시", options=list(range(1, 10)), index=period - 1,
+                                                             key=f"p_{override_key}", label_visibility="collapsed")
+
+                            # 3. 버튼 영역 (저장 / 취소 / 삭제)
                             c1, c2, c3 = st.columns(3)
+
                             if c1.button("저장", key=f"sv_{override_key}", use_container_width=True):
-                                st.session_state.custom_overrides[override_key] = new_val
+                                new_date_str = new_date.strftime("%Y-%m-%d")
+                                new_override_key = f"{new_date_str}_{new_period}"
+
+                                # 날짜나 교시가 변경된 경우 (이동 로직)
+                                if new_override_key != override_key:
+                                    # 새 위치에 데이터 복사
+                                    st.session_state.custom_overrides[new_override_key] = new_val
+                                    # 기존 위치의 데이터 삭제
+                                    st.session_state.custom_overrides.pop(override_key, None)
+
+                                    # 상태(O/△/X)와 메모도 함께 이동
+                                    if override_key in st.session_state.status_data:
+                                        st.session_state.status_data[
+                                            new_override_key] = st.session_state.status_data.pop(override_key)
+                                    if override_key in st.session_state.memo_data:
+                                        st.session_state.memo_data[new_override_key] = st.session_state.memo_data.pop(
+                                            override_key)
+                                else:
+                                    # 위치 변경 없이 내용만 수정한 경우
+                                    st.session_state.custom_overrides[override_key] = new_val
+
                                 st.session_state[f"edit_{override_key}"] = False
                                 save_custom_data()
                                 st.rerun()
+
                             if c2.button("취소", key=f"cc_{override_key}", use_container_width=True):
                                 st.session_state[f"edit_{override_key}"] = False
                                 st.rerun()
-                            if c3.button("복구", key=f"rs_{override_key}", use_container_width=True):
+
+                            # 🗑️ 개별 변경 사항 삭제 (원래 상태로 복구)
+                            if c3.button("🗑️ 삭제/복구", key=f"rs_{override_key}", use_container_width=True):
+                                # 해당 칸에 커스텀하게 저장된 모든 데이터(진도, 상태, 메모)를 삭제
                                 st.session_state.custom_overrides.pop(override_key, None)
+                                st.session_state.status_data.pop(override_key, None)
+                                st.session_state.memo_data.pop(override_key, None)
+
+                                # 위젯에 입력되어 있던 텍스트 및 선택 상자 초기화
+                                if f"in_{override_key}" in st.session_state: del st.session_state[f"in_{override_key}"]
+                                if f"s_{override_key}" in st.session_state: del st.session_state[f"s_{override_key}"]
+                                if f"m_{override_key}" in st.session_state: del st.session_state[f"m_{override_key}"]
+
                                 save_custom_data()
                                 st.session_state[f"edit_{override_key}"] = False
-                                st.rerun()
-                        else:
-                            st.markdown(
-                                f"<span class='edit-anchor grade-{grade_num} {'overridden-true' if override_key in st.session_state.custom_overrides else ''}'></span>",
-                                unsafe_allow_html=True)
-                            if st.button(f"**{class_info}반**\n\n{display_content} ✏️", key=f"btn_{override_key}",
-                                         use_container_width=True):
-                                st.session_state[f"edit_{override_key}"] = True
                                 st.rerun()
 
 
