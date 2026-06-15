@@ -398,6 +398,16 @@ with col_left:
                                 st.session_state[f"edit_{override_key}"] = False
                                 st.rerun()
 
+                        else:
+                                # 👇 이 부분이 지워져서 안 보였던 것입니다! (평상시 버튼 렌더링)
+                                st.markdown(
+                                    f"<span class='edit-anchor grade-{grade_num} {'overridden-true' if override_key in st.session_state.custom_overrides else ''}'></span>",
+                                    unsafe_allow_html=True)
+                                if st.button(f"**{class_info}반**\n\n{display_content} ✏️", key=f"btn_{override_key}",
+                                             use_container_width=True):
+                                    st.session_state[f"edit_{override_key}"] = True
+                                    st.rerun()
+
 
                     # 👇 이렇게 수정하세요
                     m_c1, m_c2 = st.columns([1.5, 2])
