@@ -289,7 +289,7 @@ with col_right:
             with header_col1:
                 st.write("**[전일 행사]**")
             with header_col2:
-                submitted = st.form_submit_button("✅ 전체 저장", type="primary", use_container_width=True)
+                submitted = st.form_submit_button("✅저장", type="primary", use_container_width=True)
 
             temp_events = st.data_editor(st.session_state.events, num_rows="dynamic", use_container_width=True,
                                          key="ev_form")
