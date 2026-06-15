@@ -231,26 +231,32 @@ with col_right:
                                                                        key=f"p_{g}")
 
     with st.expander("🚨 일정 변경 (행사/결강)", expanded=True):
-        # 👇 st.form을 사용하여 입력 위젯들을 하나로 묶습니다.
         with st.form("event_cancel_form"):
-            st.write("**[전일 행사]**")
-            # 입력을 해도 즉시 session_state를 바꾸지 않고 임시 변수에 담아둡니다.
+            # 제목과 저장 버튼을 위쪽에 나란히 배치하기 위해 컬럼 분할
+            header_col1, header_col2 = st.columns([7, 3])
+
+            with header_col1:
+                st.write("**[전일 행사]**")
+            with header_col2:
+                # 저장 버튼을 위쪽으로 끌어올림
+                submitted = st.form_submit_button("✅ 전체 저장", type="primary", use_container_width=True)
+
+            # 전일 행사 표
             temp_events = st.data_editor(st.session_state.events, num_rows="dynamic", use_container_width=True,
                                          key="ev_form")
 
+            st.markdown("<br>", unsafe_allow_html=True)  # 약간의 여백 추가
+
+            # 특정 교시 결강 표
             st.write("**[특정 교시 결강]**")
             temp_cancels = st.data_editor(st.session_state.cancels, num_rows="dynamic", use_container_width=True,
                                           key="ca_form")
 
-            # 👇 폼 안에는 반드시 제출(Submit) 버튼이 있어야 합니다.
-            submitted = st.form_submit_button("✅ 행사/결강 적용 및 저장", type="primary", use_container_width=True)
-
+            # 폼 제출 시 작동할 로직
             if submitted:
-                # 버튼을 누른 순간에만 임시 변수의 데이터를 진짜 state로 옮겨 담습니다.
                 st.session_state.events = temp_events
                 st.session_state.cancels = temp_cancels
 
-                # DB에 바로 저장하고 화면을 단 한 번만 새로고침합니다.
                 save_custom_data()
                 st.rerun()
 
