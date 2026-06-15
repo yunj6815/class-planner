@@ -47,7 +47,8 @@ def load_all_user_data(user_id):
         st.session_state.custom_overrides = d.get('overrides', {})
         st.session_state.events = pd.DataFrame(d.get('events', []))
         st.session_state.cancels = pd.DataFrame(d.get('cancels', []))
-
+        st.session_state.status_data = d.get('status_data', {})
+        st.session_state.memo_data = d.get('memo_data', {})
 
 def save_settings():
     user_id = st.session_state.user.id
@@ -77,6 +78,8 @@ def save_custom_data():
         "overrides": st.session_state.custom_overrides,
         "events": st.session_state.events.to_dict(),
         "cancels": st.session_state.cancels.to_dict()
+        "status_data": st.session_state.status_data,
+        "memo_data": st.session_state.memo_data
     }
     supabase.table("user_data").upsert(payload).execute()
 
@@ -131,6 +134,15 @@ if 'lesson_plans_dict' not in st.session_state: st.session_state.lesson_plans_di
 if 'events' not in st.session_state: st.session_state.events = pd.DataFrame(columns=["날짜", "행사명"])
 if 'cancels' not in st.session_state: st.session_state.cancels = pd.DataFrame(columns=["날짜", "교시", "사유"])
 if 'custom_overrides' not in st.session_state: st.session_state.custom_overrides = {}
+if 'status_data' not in st.session_state: st.session_state.status_data = {}
+if 'memo_data' not in st.session_state: st.session_state.memo_data = {}
+
+# 👇 위젯 상태 변경 시 실행될 콜백 함수 (UI 렌더링 전 상단에 배치)
+def update_status(k):
+    st.session_state.status_data[k] = st.session_state[f"s_{k}"]
+
+def update_memo(k):
+    st.session_state.memo_data[k] = st.session_state[f"m_{k}"]
 
 # --- [메인 화면 UI] ---
 col_logo, col_user = st.columns([8, 2])
@@ -344,8 +356,36 @@ with col_left:
                                 st.session_state[f"edit_{override_key}"] = True
                                 st.rerun()
 
+
+                    # 👇 이렇게 수정하세요
                     m_c1, m_c2 = st.columns([1, 2.5])
-                    m_c1.selectbox("st", ["O", "△", "X"], key=f"s_{override_key}", label_visibility="collapsed")
-                    m_c2.text_input("m", key=f"m_{override_key}", placeholder="메모", label_visibility="collapsed")
+
+                    # 현재 저장된 상태 가져오기 (없으면 기본값)
+                    curr_status = st.session_state.status_data.get(override_key, "O")
+                    curr_memo = st.session_state.memo_data.get(override_key, "")
+
+                    # selectbox의 기본 선택 위치(index) 계산
+                    status_options = ["O", "△", "X"]
+                    st_idx = status_options.index(curr_status) if curr_status in status_options else 0
+
+                    m_c1.selectbox(
+                        "st",
+                        status_options,
+                        index=st_idx,
+                        key=f"s_{override_key}",
+                        label_visibility="collapsed",
+                        on_change=update_status,  # 값이 바뀌면 콜백 함수 실행
+                        args=(override_key,)  # 콜백 함수에 전달할 키값
+                    )
+
+                    m_c2.text_input(
+                        "m",
+                        value=curr_memo,
+                        key=f"m_{override_key}",
+                        placeholder="메모",
+                        label_visibility="collapsed",
+                        on_change=update_memo,  # 값이 바뀌면 콜백 함수 실행
+                        args=(override_key,)
+                    )
                 else:
-                    st.markdown("<div class='empty-slot'></div>", unsafe_allow_html=True)
+                st.markdown("<div class='empty-slot'></div>", unsafe_allow_html=True)
