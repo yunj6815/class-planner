@@ -192,6 +192,7 @@ if 'memo_data' not in st.session_state: st.session_state.memo_data = {}
 
 st.markdown("""
 <style>
+    [data-testid="stSidebar"] { min-width: 500px !important; max-width: 500px !important; }
     .slot-card { padding: 10px; border-radius: 4px; margin-bottom: 5px; min-height: 90px; line-height: 1.4; border: 1px solid #ddd; width: 100%; }
     .grade1 { background-color: #fef0d9; border-top: 4px solid #fdcc8a; }
     .grade2 { background-color: #e5f5e0; border-top: 4px solid #a1d99b; }
@@ -545,10 +546,9 @@ for period in range(1, 10):
                             st.rerun()
 
                 m_c1, m_c2 = st.columns([1.5, 2])
-                curr_status = st.session_state.status_data.get(override_key, "O")
+                curr_status = st.session_state.status_data.get(override_key, "-")
                 curr_memo = st.session_state.memo_data.get(override_key, "")
-                status_options = ["O", "△", "X"]
-                st_idx = status_options.index(curr_status) if curr_status in status_options else 0
+                status_options = ["-", "O", "△", "X"]
 
                 m_c1.selectbox("st", status_options, index=st_idx, key=f"s_{override_key}",
                                label_visibility="collapsed", on_change=update_status, args=(override_key,))
@@ -562,18 +562,54 @@ for period in range(1, 10):
 # ==========================================
 with st.sidebar:
     with st.expander("📊 반별 진도 현황 대시보드", expanded=True):
-        st.write("현재까지 누적된 학급별 진행 차시입니다.")
+        st.write("교사가 직접 **완료(O)**로 체크한 수업만 누적 계산됩니다.")
+
+        # 전체 학기 데이터를 순회하며 'O' 개수 직접 세기
+        actual_progress = defaultdict(int)
+        curr = st.session_state.start_date
+        while curr <= st.session_state.end_date:
+            if curr.weekday() < 5:
+                curr_str = curr.strftime("%Y-%m-%d")
+                day_name = ["월", "화", "수", "목", "금"][curr.weekday()]
+
+                if curr_str not in [str(d) for d in st.session_state.events["날짜"].values]:
+                    for p in range(1, 10):
+                        override_key = f"{curr_str}_{p}"
+
+                        base_class_info = str(st.session_state.timetable.loc[p, day_name]).strip()
+                        class_info = base_class_info
+
+                        override_val = st.session_state.custom_overrides.get(override_key, "")
+                        is_moved_class = isinstance(override_val, str) and override_val.startswith(
+                            "[") and "] " in override_val
+                        if is_moved_class:
+                            end_idx = override_val.index("] ")
+                            class_info = override_val[1:end_idx]
+
+                        if class_info:
+                            cancel_match = st.session_state.cancels[
+                                (st.session_state.cancels["날짜"].astype(str) == curr_str) &
+                                (st.session_state.cancels["교시"].astype(str) == str(p))
+                                ]
+                            if cancel_match.empty or is_moved_class:
+                                # 👇 여기서 O로 체크된 것만 진도율에 더해줍니다!
+                                if st.session_state.status_data.get(override_key, "-") == "O":
+                                    actual_progress[class_info] += 1
+            curr += timedelta(days=1)
 
         for grade_name in ["1학년", "2학년", "3학년"]:
             st.markdown(f"**🔹 {grade_name}**")
 
-            grade_classes = [c for c in current_class_indices.keys() if c.startswith(grade_name[0])]
+            grade_classes = set()
+            for c in current_class_indices.keys():
+                if c.startswith(grade_name[0]):
+                    grade_classes.add(c)
 
             if not grade_classes:
                 st.caption("등록된 수업이 없습니다.")
             else:
-                for cls in sorted(grade_classes):
-                    current_idx = current_class_indices[cls]
+                for cls in sorted(list(grade_classes)):
+                    current_idx = actual_progress.get(cls, 0)
                     progress_val = min(current_idx / 40.0, 1.0)
 
                     col_cls_name, col_cls_bar = st.columns([1, 3])
