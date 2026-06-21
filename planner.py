@@ -192,7 +192,10 @@ if 'memo_data' not in st.session_state: st.session_state.memo_data = {}
 
 st.markdown("""
 <style>
-    [data-testid="stSidebar"] { min-width: 500px !important; max-width: 500px !important; }
+    section[data-testid="stSidebar"][aria-expanded="true"] { 
+        min-width: 500px !important; 
+        max-width: 500px !important; 
+    }
     .slot-card { padding: 10px; border-radius: 4px; margin-bottom: 5px; min-height: 90px; line-height: 1.4; border: 1px solid #ddd; width: 100%; }
     .grade1 { background-color: #fef0d9; border-top: 4px solid #fdcc8a; }
     .grade2 { background-color: #e5f5e0; border-top: 4px solid #a1d99b; }
