@@ -549,7 +549,7 @@ for period in range(1, 10):
                 curr_status = st.session_state.status_data.get(override_key, "-")
                 curr_memo = st.session_state.memo_data.get(override_key, "")
                 status_options = ["-", "O", "△", "X"]
-
+                st_idx = status_options.index(curr_status) if curr_status in status_options else 0
                 m_c1.selectbox("st", status_options, index=st_idx, key=f"s_{override_key}",
                                label_visibility="collapsed", on_change=update_status, args=(override_key,))
                 m_c2.text_input("m", value=curr_memo, key=f"m_{override_key}", placeholder="메모",
